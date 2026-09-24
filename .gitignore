@@ -29,3 +29,8 @@ venv/
 coverage/
 .DS_Store
 Thumbs.db
+
+# Документи курсової роботи (docx, IDEF0/ER діаграми) — поза git
+*.docx
+IDEF0*.xml
+ER.xml

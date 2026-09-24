@@ -7,6 +7,15 @@
 аналіз зіграних матчів через OpenDota API, симулятор драфту (прогноз переможця за вінрейтами),
 персональний архів прогнозів (SQLite) з авторизацією користувачів.
 
+Dota-застосунок — не лише аналітика, а й **вітрина всієї платформи** з трьома публічними
+розділами (без логіну):
+
+- 📊 **Моніторинг платформи** — стан gateway/metrics/data через стійкий HTTP-клієнт
+  (`dota/client.py`: таймаут, ретраї з бек-офом, кеш last-known-good, режим деградації);
+- 🗄️ **Управління даними** — CRUD записів через data-сервіс + експорт/імпорт прогнозів;
+- 🛡️ **Безпека / DevSecOps** — змодельований звіт проактивного контролю вразливостей
+  (`dota/security.py`: Trivy-скани, Dependabot-алерти, запуски пайплайну — демо-генерація).
+
 Навколо нього — повний DevSecOps-стек: React-дашборд, мікросервіси (Node.js + TypeScript),
 Docker-конвеєр, Kubernetes (Minikube) і CI/CD на GitHub Actions із перевірками безпеки
 (Dependabot, Trivy, npm audit, pip-audit, CodeQL).
@@ -51,8 +60,9 @@ flowchart LR
 | Health checks | `/health` у кожного сервісу + `/_stcore/health` у Dota + probes у Kubernetes |
 | Graceful degradation | Дашборд не падає при збої сервісу — показує статус `DOWN` |
 | Retry з exponential backoff | `usePolling` у фронтенді: при помилці інтервал ×2 (до ×8) |
+| Стійкий HTTP-клієнт (Dota) | `dota/client.py`: таймаут, ретраї (GET + на 5xx), stale-кеш, режим «degraded» |
 | Stateless сервіси | Можливість горизонтального масштабування (`replicas`) |
-| Конфігурація поза кодом | Env / ConfigMap (`k8s/configmap.yaml`), `DOTA_DB_PATH` для БД |
+| Конфігурація поза кодом | Env / ConfigMap (`k8s/configmap.yaml`), `DOTA_DB_PATH`, `DOTA_API_URL` |
 | Graceful shutdown | Обробка `SIGTERM`/`SIGINT` у сервісах |
 
 ---
@@ -62,12 +72,15 @@ flowchart LR
 ```
 devsecops-platform/
 ├── app.py                     # 🎯 ГОЛОВНИЙ СЕРВІС — Dota 2 Analytics (Streamlit)
+├── conftest.py                # корінь у sys.path для pytest (імпорт пакета dota)
 ├── dota/                      # Python-модулі головного сервісу
-│   ├── db.py                  #   SQLite: users + prediction_history (шлях через DOTA_DB_PATH)
+│   ├── db.py                  #   SQLite: users + prediction_history + імпорт/експорт
 │   ├── predict.py             #   розрахунок ймовірності перемоги драфту
+│   ├── client.py              #   стійкий HTTP-клієнт платформи (ретраї/кеш/деградація)
+│   ├── security.py            #   змодельований звіт безпеки (демо-генератор)
 │   ├── requirements.txt
-│   └── Dockerfile             #   non-root, slim, python:3.12 + probes
-├── tests/                     # pytest: dota.db + dota.predict
+│   └── Dockerfile             #   non-root, slim, python:3.12 + probes, без pip
+├── tests/                     # pytest: dota.db, dota.predict, client, security, db-IO
 ├── frontend/                  # React + Vite + TypeScript + Recharts (дашборд)
 ├── services/
 │   ├── gateway/               # API Gateway: проксі + агрегація статусу
@@ -98,6 +111,19 @@ devsecops-platform/
 pip install -r dota/requirements.txt
 streamlit run app.py            # http://localhost:8501
 ```
+
+> Публічні таби «Моніторинг платформи» та «Управління даними» звертаються до
+> мікросервісів через `DOTA_API_URL` (за замовчуванням `http://gateway:8080` —
+> Kubernetes-адреса). Локально вкажіть адресу port-forward:
+>
+> ```bash
+> # PowerShell:
+> $env:DOTA_API_URL="http://localhost:18080"     # gateway port-forward
+> $env:DOTA_FRONTEND_URL="http://localhost:18083" # frontend port-forward
+> streamlit run app.py
+> ```
+>
+> Без вказання — таби покажуть статус «недоступно» з демонстрацією режиму деградації.
 
 **Платформа (React + мікросервіси, Node.js ≥ 20)** — у чотирьох терміналах:
 
@@ -205,9 +231,31 @@ Dota 2 Analytics (Streamlit) — власний UI: `http://localhost:8501` (а�
 
 ---
 
+## 🎯 Карта вимог курсової роботи
+
+| Вимога завдання | Де реалізовано та де демонструється |
+|---|---|
+| Архітектура стійкої клієнт-серверної взаємодії | Gateway як єдина точка входу (проксі + `/api/status`); стійкий HTTP-клієнт `dota/client.py` (таймаут, ретраї з бек-офом, stale-кеш, режим деградації); health checks + probes |
+| Безпечна безперервна доставка (DevSecOps) | GitHub Actions: `ci.yml` (тести, npm/pip-audit, Docker, Trivy), `codeql.yml` (SAST), `cd.yml` (деплой на self-hosted runner → Minikube) |
+| Масштабована мікросервісна платформа | `gateway` :8080, `metrics` :8081, `data` :8082, `frontend`, `dota` — 5 незалежних сервісів, stateless, ресурсні limits |
+| Інтерактивний користувацький інтерфейс | Dota 2 Analytics (Streamlit): аналіз матчів, симулятор драфту, архів; публічні таби моніторингу/даних/безпеки |
+| Фронтенд-дашборд моніторингу системних процесів | React-дашборд (`frontend/`): сторінки Огляд / Метрики / Дані + публічний таб «Моніторинг платформи» у Dota |
+| Управління даними | CRUD записів через data-сервіс (таб «Управління даними» + сторінка Дані у React); експорт/імпорт прогнозів (SQLite) |
+| Автоматизований конвеєр збірки (React, Docker, Minikube, GitHub Actions) | CI збирає образи всіх 5 сервісів у GHCR; CD деплоїть у Minikube на self-hosted runner |
+| Dependabot Security Vulnerability Alerts | `.github/dependabot.yml` (npm, pip, docker, github-actions): алерти + авто-PR; стан звітності — таб «Безпека / DevSecOps» у Dota |
+| Виявлення вразливостей у залежностях | `npm audit` + `pip-audit` у CI (fail), Trivy-скан образів (поріг 0 CRITICAL/HIGH) |
+| Автоматична генерація оновлень | Dependabot версійні PR; `cd.yml` підхоплює оновлені образи |
+| Робоче локальне кластерне середовище з DevSecOps-пайплайном | Minikube + ingress (dashboard.local, dota.local), 5 деплойментів, CD оновлює кластер |
+| Система проактивного контролю вразливостей | Таб «Безпека / DevSecOps» (демо-звіт) + реальні механізми: Dependabot Alerts, Trivy-gate у CI, CodeQL, аудити залежностей |
+
+---
+
 ## ✅ Що зроблено / критерії виконання
 
-- [x] 🎯 Головний сервіс: ІС аналітики Dota 2 (Streamlit + SQLite + OpenDota API), pytest-покриття
+- [x] 🎯 Головний сервіс: ІС аналітики Dota 2 (Streamlit + SQLite + OpenDota API), pytest-покриття (34 тести)
+- [x] Публічні таби Dota: «Моніторинг платформи», «Управління даними», «Безпека / DevSecOps»
+- [x] Стійкий HTTP-клієнт Dota (`dota/client.py`): таймаут, ретраї, stale-кеш, деградація
+- [x] Експорт/імпорт персональних прогнозів (CSV/JSON) + змодельований звіт безпеки
 - [x] Мікросервісна платформа (gateway + metrics + data), TypeScript
 - [x] React-дашборд: моніторинг процесів/метрик + CRUD управління даними
 - [x] Стійка клієнт-серверна взаємодія (health checks, backoff, graceful degradation)

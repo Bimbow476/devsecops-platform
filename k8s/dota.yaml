@@ -30,6 +30,14 @@ spec:
           env:
             - name: DOTA_DB_PATH
               value: "/app/data/dota_analytics.db"
+            - name: DOTA_API_URL
+              value: "http://gateway:8080"
+            - name: DOTA_FRONTEND_URL
+              value: "http://frontend"
+            - name: DOTA_API_TIMEOUT
+              value: "3"
+            - name: DOTA_API_CACHE_TTL
+              value: "15"
           volumeMounts:
             - name: dota-data
               mountPath: /app/data
