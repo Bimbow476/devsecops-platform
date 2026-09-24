@@ -9,17 +9,48 @@ const app = express();
 const config = loadConfig();
 
 app.use(cors());
-app.use(express.json());
+// УВАГА: gateway НЕ парсить JSON-тіла. express.json() споживав би потік
+// запиту до того, як його переслати проксі, ламаючи POST через шлюз.
+// Валідацію тіла виконує сам сервіс (data/...).
 
-// Проксі до мікросервісів
+// Проксі до мікросервісів.
+// У v3 http-proxy-middleware передає шлях відносно точки монтування, тому
+// використовуємо pathFilter із повним шляхом (без app.use(path)).
 const metricsProxy = createProxyMiddleware({
   target: config.metricsUrl,
   changeOrigin: true,
+  pathFilter: '/api/metrics',
 });
+// Сервіс data експонує маршрути /api/records; gateway монтує їх під /api/data/*
+// та переписує шлях (топологія шлюзу відокремлена від домену сервісу).
 const dataProxy = createProxyMiddleware({
   target: config.dataUrl,
   changeOrigin: true,
+  pathFilter: '/api/data',
+  pathRewrite: (path: string) => path.replace(/^\/api\/data/, '/api'),
 });
+
+/** Процесна телеметрія з graceful fallback (pidusage може не працювати на Windows). */
+async function selfProcessInfo(): Promise<ServiceStatus['process']> {
+  try {
+    const stats = await pidusage(process.pid);
+    return {
+      pid: stats.pid,
+      cpu: Math.round(stats.cpu * 10) / 10,
+      memory: stats.memory,
+      uptimeSec: Math.round(process.uptime()),
+      source: 'pidusage',
+    };
+  } catch {
+    return {
+      pid: process.pid,
+      cpu: 0,
+      memory: process.memoryUsage().rss,
+      uptimeSec: Math.round(process.uptime()),
+      source: 'process',
+    };
+  }
+}
 
 app.get('/', (_req, res) => {
   res.json({
@@ -50,7 +81,7 @@ app.get('/health', (_req, res) => {
  */
 app.get('/api/status', async (_req, res) => {
   try {
-    const selfStats = await pidusage(process.pid);
+    const selfProcess = await selfProcessInfo();
     const children: ServiceStatus[] = await collectStatus([
       { name: 'metrics', url: config.metricsUrl },
       { name: 'data', url: config.dataUrl },
@@ -64,12 +95,7 @@ app.get('/api/status', async (_req, res) => {
       latencyMs: 0,
       error: null,
       version: config.version,
-      process: {
-        pid: selfStats.pid,
-        cpu: Math.round(selfStats.cpu * 10) / 10,
-        memory: selfStats.memory,
-        uptimeSec: Math.round(process.uptime()),
-      },
+      process: selfProcess,
     };
 
     res.json([self, ...children]);
@@ -81,9 +107,20 @@ app.get('/api/status', async (_req, res) => {
   }
 });
 
-// Проксі підключаємо після власних маршрутів, щоб вони не перехоплювались.
-app.use('/api/metrics', metricsProxy);
-app.use('/api/data', dataProxy);
+// Проксі підключаємо глобально (pathFilter відфільтровує потрібні шляхи).
+app.use(metricsProxy);
+app.use(dataProxy);
+
+// Централізована обробка помилок: без HTML-стек-трейсів назовні (безпека).
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  if (err instanceof SyntaxError) {
+    res.status(400).json({ error: 'bad_request', detail: 'invalid JSON body' });
+    return;
+  }
+  console.error(err);
+  res.status(500).json({ error: 'internal_error' });
+});
 
 const server = app.listen(config.port, () => {
   console.log(

@@ -155,3 +155,4 @@ GitHub-hosted runners **не мають доступу** до вашого ло�
 | Поди `ImagePullBackOff` | Локальні образи `:local` збираються лише через `scripts/deploy.ps1`; `imagePullPolicy: IfNotPresent` |
 | `cd.yml` не запускається | Немає self-hosted runner з відповідними мітками (п.7) |
 | Dependabot не створює PR | Перевірте `.github/dependabot.yml` та що репо не в жодному блокуванні |
+| `npm install` блокує скрипти (`allowScripts`) | Новіші npm блокують postinstall за замовчуванням. Для нативних модулів (better-sqlite3): `npm install-scripts approve better-sqlite3 && npm rebuild better-sqlite3` |

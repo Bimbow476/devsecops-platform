@@ -8,6 +8,7 @@ export interface ProcessInfo {
   cpu: number;
   memory: number;
   uptimeSec: number;
+  source: 'pidusage' | 'process';
 }
 
 export interface ServiceStatus {

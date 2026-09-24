@@ -23,16 +23,17 @@ test('insertRecord створює запис із дефолтними знач�
   db.close();
 });
 
-test('listRecords повертає забражені результати з фільтрами та пошуком', () => {
+test('listRecords повертає збережені результати з фільтрами та пошуком', () => {
   const db = testDb();
-  insertRecord(db, { title: 'Інфраструктура', status: 'in_progress', priority: 1 });
-  insertRecord(db, { title: 'Безпека', status: 'done', priority: 2 });
+  insertRecord(db, { title: 'Інфраструктура', status: 'in_progress', priority: 1, description: null });
+  insertRecord(db, { title: 'Безпека', status: 'done', priority: 2, description: null });
 
   const all = listRecords(db);
   assert.equal(all.total, 8); // 6 демо + 2 доданих
   assert.ok(all.items.length >= 8);
   assert.equal(all.items[0].title, 'Безпека'); // ORDER BY id DESC
 
+  // Пошук нечутливий до регістру (у т.ч. кирилиця, через locase())
   const search = listRecords(db, { search: 'безпек' });
   assert.equal(search.total, 1);
   assert.equal(search.items[0].title, 'Безпека');
@@ -42,9 +43,10 @@ test('listRecords повертає забражені результати з ф
   db.close();
 });
 
-test('updateRecord оновлює лише передані поля', () => {
+test('updateRecord оновлює лише передані поля', async () => {
   const db = testDb();
   const created = insertRecord(db, { title: 'Старий заголовок', priority: 4 });
+  await new Promise((resolve) => setTimeout(resolve, 10));
   const updated = updateRecord(db, created.id, { title: 'Новий заголовок' });
   assert.ok(updated);
   assert.equal(updated.title, 'Новий заголовок');

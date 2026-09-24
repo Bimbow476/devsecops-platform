@@ -23,6 +23,7 @@ export interface ProcessInfo {
   cpu: number;
   memory: number;
   uptimeSec: number;
+  source: 'pidusage' | 'process';
 }
 
 export interface SystemMetrics {
@@ -47,14 +48,29 @@ export interface SystemMetrics {
 }
 
 export async function getSelfProcessInfo(): Promise<ProcessInfo> {
-  const stats = await pidusage(process.pid);
-  return {
-    pid: stats.pid,
-    name: 'node (metrics)',
-    cpu: Math.round(stats.cpu * 10) / 10,
-    memory: stats.memory,
-    uptimeSec: Math.round(process.uptime()),
-  };
+  const name = 'node (metrics)';
+  try {
+    const stats = await pidusage(process.pid);
+    return {
+      pid: stats.pid,
+      name,
+      cpu: Math.round(stats.cpu * 10) / 10,
+      memory: stats.memory,
+      uptimeSec: Math.round(process.uptime()),
+      source: 'pidusage',
+    };
+  } catch {
+    // Fallback для платформ без pidusage (напр., Windows без wmic):
+    // деградуємо до значень process.memoryUsage() замість падіння.
+    return {
+      pid: process.pid,
+      name,
+      cpu: 0,
+      memory: process.memoryUsage().rss,
+      uptimeSec: Math.round(process.uptime()),
+      source: 'process',
+    };
+  }
 }
 
 /** Збирає системні метрики хоста та телеметрію власного процесу. */

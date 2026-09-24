@@ -89,10 +89,14 @@ app.delete('/api/records/:id', (req: Request, res: Response) => {
   res.status(204).end();
 });
 
-// Централізована обробка помилок валідації
+// Централізована обробка помилок
 app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
   if (err instanceof ZodError) {
     res.status(400).json({ error: 'validation_failed', details: err.flatten() });
+    return;
+  }
+  if (err instanceof SyntaxError) {
+    res.status(400).json({ error: 'bad_request', detail: 'invalid JSON body' });
     return;
   }
   console.error(err);

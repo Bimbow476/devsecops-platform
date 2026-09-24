@@ -152,6 +152,7 @@ export default function MetricsPage() {
                   <th>CPU</th>
                   <th>Пам'ять</th>
                   <th>Uptime</th>
+                  <th>Джерело</th>
                 </tr>
               </thead>
               <tbody>
@@ -162,6 +163,7 @@ export default function MetricsPage() {
                     <td>{p.cpu.toFixed(1)}%</td>
                     <td>{formatBytes(p.memory)}</td>
                     <td>{formatUptime(p.uptimeSec)}</td>
+                    <td>{p.source === 'pidusage' ? 'pidusage' : 'process (fallback)'}</td>
                   </tr>
                 ))}
               </tbody>

@@ -157,6 +157,17 @@ minikube service frontend -n devsecops   # відкрити дашборд
 | Trivy у CI | Блокування мерджа образу з CRITICAL/HIGH CVE |
 | `npm audit` у CI | Провал кроку при вразливостях високого рівня |
 
+#### Приклад: SCA виявив і виправив реальну CVE (під час розробки)
+
+`npm audit` на етапі встановлення залежностей фронтенду виявив **2 moderate-вразливості**:
+
+- **CVE-2025-68470** (`GHSA-wrjc-x8rr-h8h6`) — React Router: open redirect через `\` у `<Link>`/`useNavigate`
+- **GHSA-337j-9hxr-rhxg** — React Router: Arbitrary Constructor Injection у SSR hydration
+
+**Дія:** залежність `react-router-dom` оновлено з `^6.28.1` до `^7.18.4` (виправлений реліз).
+Повторний `npm audit` → **0 вразливостей**. Цикл «виявлення → оновлення → верифікація» —
+саме той процес, який Dependabot автоматизує в CI/CD.
+
 ---
 
 ## 📡 API

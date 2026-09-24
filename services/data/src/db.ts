@@ -37,6 +37,13 @@ export function openDatabase(dbPath: string): Database.Database {
   }
   const db = new Database(dbPath);
   db.pragma('journal_mode = WAL');
+
+  // SQLite LIKE за замовчуванням реєструє лише ASCII-літери.
+  // Реєструємо власну функцію locase() для коректного (unicode) пошуку.
+  db.function('locase', (value: unknown) =>
+    typeof value === 'string' ? value.toLowerCase() : value,
+  );
+
   db.exec(`
     CREATE TABLE IF NOT EXISTS records (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -89,8 +96,8 @@ export function listRecords(
   const params: unknown[] = [];
 
   if (options.search) {
-    where.push('(title LIKE ? OR description LIKE ?)');
-    const like = `%${options.search}%`;
+    where.push('(locase(title) LIKE ? OR locase(description) LIKE ?)');
+    const like = `%${options.search.toLowerCase()}%`;
     params.push(like, like);
   }
   if (options.status) {
