@@ -63,30 +63,51 @@ winget install Kubernetes.kubectl
 # або вручну: https://minikube.sigs.k8s.io/docs/start/
 ```
 
-Запуск кластера (драйвер docker):
+Запуск кластера (драйвер docker). ⚠️ Останні версії Minikube (1.39+) всередині
+kicbase запускають **containerd** (а не docker daemon), тому вкажіть
+`--container-runtime=containerd` явно — інакше кластер може стартувати з помилкою
+`cri-docker.socket: Socket service cri-docker.service not loaded`:
 
 ```powershell
-minikube start --driver=docker
+minikube start --driver=docker --container-runtime=containerd
 minikube addons enable ingress
 kubectl get nodes
 ```
 
-> Якщо `minikube start` падає — перш за все перевірте п.1 (віртуалізацію).
+> ⚠️ `minikube docker-env` з драйвером docker у Windows **не працює**
+> (помилка про SSH agent). Тому образи збираються в локальний Docker Desktop
+> і завантажуються в кластер через `minikube image load` (див. розділ 5).
 
 ---
 
 ## 5. Локальний деплой платформи
 
+`deploy.ps1` виконує ланцюжок **build у Docker Desktop → `minikube image load` →
+`kubectl apply` → `kubectl rollout status`** (це робочий підхід для Minikube
+1.39+ з containerd, де `minikube docker-env` не працює):
+
 ```powershell
 cd devsecops-platform
-.\scripts\minikube-start.ps1   # старт кластера
-.\scripts\deploy.ps1           # збірка образів + kubectl apply
+.\scripts\minikube-start.ps1   # старт кластера (containerd + ingress)
+.\scripts\deploy.ps1           # збірка образів + image load + apply
+kubectl get pods -n devsecops -o wide   # усі 4 поди мають бути Running
+```
+
+Відкрити дашборд:
+
+```powershell
 minikube service frontend -n devsecops
+# або через gateway (API):
+minikube service gateway -n devsecops
 ```
 
 Якщо ingress увімкнено, можна відкрити `http://dashboard.local`
 (для цього додайте у `C:\Windows\System32\drivers\etc\hosts` рядок
 `192.168.49.2  dashboard.local` — IP можна дізнатися через `minikube ip`).
+
+> Маніфести в `k8s/` посилаються на локальний тег `devsecops-platform-*:local`
+> з `imagePullPolicy: IfNotPresent`. CD (GitHub Actions) поверх них ставить
+> образи `ghcr.io/...:sha-<sha>` через `kubectl set image`.
 
 ---
 
@@ -118,21 +139,41 @@ minikube service frontend -n devsecops
 ## 7. Реєстрація self-hosted runner (для CD у Minikube)
 
 GitHub-hosted runners **не мають доступу** до вашого локального кластера,
-тому `cd.yml` виконується на вашій машині.
+тому `cd.yml` виконується на вашій машині. `runs-on` вимагає мітки:
+
+```yaml
+runs-on: [self-hosted, linux, x64, minikube]
+```
+
+Оскільки мінікуб живе на Windows-хості, реєструємо Windows-runner із
+**додатковими мітками** `linux` та `minikube` (без зміни `runs-on`):
 
 1. GitHub → репозиторій → **Settings → Actions → Runners → New self-hosted runner**.
-2. Оберіть ОС (Windows) та архітектуру, виконайте команди у корені проєкту:
+2. Завантажте archive **actions-runner-win-x64** з
+   <https://github.com/actions/runner/releases/latest> та розпакуйте у `C:\actions-runner`.
+3. Отримайте registration token та налаштуйте:
 
    ```powershell
-   # GitHub надасть конкретні команди з токеном; зразок:
-   mkdir actions-runner; cd actions-runner
-   # (завантажте runner archive за посиланням зі сторінки)
-   .\config.cmd --url https://github.com/<USER>/devsecops-platform --token <TOKEN>
+   cd C:\actions-runner
+   $token = (gh api -X POST repos/<USER>/devsecops-platform/actions/runners/registration-token | ConvertFrom-Json).token
+   .\config.cmd --url https://github.com/<USER>/devsecops-platform --token $token `
+     --name win-minikube --labels minikube,linux --unattended --replace
+   ```
+
+4. Запустіть runner. **Важливо**: скрипт-крок у `cd.yml` має `shell: bash`,
+   тому у PATH процесу runner'а має бути **Git Bash** (не WSL `bash.exe`):
+
+   ```powershell
+   $env:PATH = 'C:\Program Files\Git\bin;' + $env:PATH   # Git Bash попереду system32
    .\run.cmd
    ```
 
-3. Додайте мітку `minikube` (редагуйте `.github/workflows/cd.yml` за потреби).
-4. У сесії runner'а мають бути доступні `kubectl` із контекстом Minikube.
+5. У процесі runner'а мають бути доступні `kubectl` (контекст `minikube`) та `tr`.
+6. `.gitattributes` у репозиторії гарантує LF для `*.sh`, тому скрипти
+   виконуються коректно навіть після Windows-checkout (без CRLF у шебанг).
+
+> Через вимогу нижнього регістру в GHCR (`Bimbow476` → `bimbow476`) імена образів
+> у CI ловеряться через bash `${REPO,,}` / `tr` — у білдах це вже враховано.
 
 ---
 
