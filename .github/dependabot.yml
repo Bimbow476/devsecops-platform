@@ -1,0 +1,62 @@
+version: 2
+updates:
+  # --- JavaScript/TypeScript (npm) ---
+  - package-ecosystem: npm
+    directory: /services/gateway
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    labels: ["dependencies", "npm"]
+
+  - package-ecosystem: npm
+    directory: /services/metrics
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    labels: ["dependencies", "npm"]
+
+  - package-ecosystem: npm
+    directory: /services/data
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    labels: ["dependencies", "npm"]
+
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    labels: ["dependencies", "npm"]
+
+  # --- Docker (Dockerfile + базові образи) ---
+  - package-ecosystem: docker
+    directory: /services/gateway
+    schedule:
+      interval: weekly
+    labels: ["dependencies", "docker"]
+
+  - package-ecosystem: docker
+    directory: /services/metrics
+    schedule:
+      interval: weekly
+    labels: ["dependencies", "docker"]
+
+  - package-ecosystem: docker
+    directory: /services/data
+    schedule:
+      interval: weekly
+    labels: ["dependencies", "docker"]
+
+  - package-ecosystem: docker
+    directory: /frontend
+    schedule:
+      interval: weekly
+    labels: ["dependencies", "docker"]
+
+  # --- GitHub Actions ---
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    labels: ["dependencies", "github-actions"]

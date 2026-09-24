@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: platform-config
+  namespace: devsecops
+  labels:
+    app.kubernetes.io/part-of: devsecops-platform
+data:
+  METRICS_URL: "http://metrics:8081"
+  DATA_URL: "http://data:8082"
+  GATEWAY_URL: "http://gateway:8080"

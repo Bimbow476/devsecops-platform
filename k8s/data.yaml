@@ -1,0 +1,73 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: data
+  namespace: devsecops
+  labels:
+    app: data
+    app.kubernetes.io/part-of: devsecops-platform
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: data
+  template:
+    metadata:
+      labels:
+        app: data
+    spec:
+      securityContext:
+        runAsNonRoot: true
+      containers:
+        - name: data
+          image: devsecops-platform-data:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8082
+              name: http
+          env:
+            - name: PORT
+              value: "8082"
+            - name: DB_PATH
+              value: "/data/records.db"
+          volumeMounts:
+            - name: data-volume
+              mountPath: /data
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 5
+      volumes:
+        - name: data-volume
+          # Для продакшну рекомендується PVC (наприклад, RWO volume); emptyDir — демо-вибір.
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: data
+  namespace: devsecops
+  labels:
+    app: data
+spec:
+  selector:
+    app: data
+  ports:
+    - name: http
+      port: 8082
+      targetPort: 8082

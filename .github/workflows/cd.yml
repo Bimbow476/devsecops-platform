@@ -1,0 +1,43 @@
+name: CD
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'k8s/**'
+      - 'services/**'
+      - 'frontend/**'
+      - '.github/workflows/ci.yml'
+      - '.github/workflows/cd.yml'
+
+# ВАЖЛИВО: GitHub-hosted runners не мають доступу до локального Minikube.
+# Цей воркфлоу виконується на self-hosted runner з міткою `minikube`
+# (див. SETUP.md -> Реєстрація self-hosted runner).
+jobs:
+  deploy:
+    name: Deploy to Minikube (self-hosted)
+    runs-on: [self-hosted, linux, x64, minikube]
+    env:
+      REGISTRY: ghcr.io
+      NAMESPACE: devsecops
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify cluster connection
+        run: |
+          kubectl config current-context
+          kubectl get nodes -o wide
+
+      - name: Update images to current commit
+        run: |
+          chmod +x ./scripts/k8s-update-images.sh
+          ./scripts/k8s-update-images.sh "${{ github.sha }}"
+
+      - name: Apply Kubernetes manifests
+        run: |
+          kubectl apply -f k8s/namespace.yaml
+          kubectl apply -f k8s/
+
+      - name: Show deployment status
+        run: kubectl get pods -n "${{ env.NAMESPACE }}" -o wide

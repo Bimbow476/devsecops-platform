@@ -1,0 +1,61 @@
+name: devsecops-platform
+
+services:
+  gateway:
+    build: ./services/gateway
+    image: devsecops-platform-gateway:local
+    environment:
+      PORT: "8080"
+      METRICS_URL: "http://metrics:8081"
+      DATA_URL: "http://data:8082"
+    ports:
+      - "8080:8080"
+    depends_on:
+      - metrics
+      - data
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  metrics:
+    build: ./services/metrics
+    image: devsecops-platform-metrics:local
+    environment:
+      PORT: "8081"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8081/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  data:
+    build: ./services/data
+    image: devsecops-platform-data:local
+    environment:
+      PORT: "8082"
+      DB_PATH: "/data/records.db"
+    volumes:
+      - data-volume:/data
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8082/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  frontend:
+    build: ./frontend
+    image: devsecops-platform-frontend:local
+    ports:
+      - "3000:80"
+    depends_on:
+      - gateway
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/"]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+
+volumes:
+  data-volume:
