@@ -21,7 +21,8 @@ COPY package.json package-lock.json ./
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 RUN chown -R node:node /app && mkdir -p /data && chown node:node /data
-USER node
+# runAsNonRoot у K8s вимагає числовий UID (node => 1000)
+USER 1000
 ENV PORT=8082
 EXPOSE 8082
 VOLUME ["/data"]

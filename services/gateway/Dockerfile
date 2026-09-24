@@ -16,7 +16,8 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 COPY --from=build /app/dist ./dist
-USER node
+# runAsNonRoot у K8s вимагає числовий UID (node => 1000)
+USER 1000
 ENV PORT=8080
 EXPOSE 8080
 HEALTHCHECK --interval=10s --timeout=3s --start-period=10s --retries=3 \
