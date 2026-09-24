@@ -8,7 +8,6 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_PREFIX: ghcr.io/${{ github.repository }}
 
 jobs:
   # ---------- Збірка, тести та SCA-аудит залежностей ----------
@@ -68,9 +67,12 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # GHCR вимагає нижній регістр: github.repository може містити великі літери
       - name: Compute image name
         id: image
-        run: echo "name=${{ env.IMAGE_PREFIX }}-${{ matrix.service }}" >> "$GITHUB_OUTPUT"
+        run: |
+          REPO="${{ github.repository }}"
+          echo "name=ghcr.io/${REPO,,}-${{ matrix.service }}" >> "$GITHUB_OUTPUT"
 
       # context: frontend знаходиться в корені, сервіси — у services/<name>
       - name: Build and push image

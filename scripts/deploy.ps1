@@ -1,9 +1,12 @@
 <#
 Deploy the platform to Minikube:
-  - builds Docker images with tag :local
+  - builds Docker images locally (Docker Desktop) with tag :local
+  - loads the images into the Minikube cluster (minikube image load)
   - applies Kubernetes manifests (namespace devsecops)
-  - prints how to open the frontend
+  - waits for rollout and prints how to open the frontend
 NOTE: keep this file pure ASCII (no Cyrillic) for PowerShell 5.1 compatibility.
+NOTE: minikube 1.39 docker driver runs containerd inside kicbase, so
+      `minikube docker-env` is NOT usable; use `minikube image load` instead.
 #>
 param(
   [string]$Namespace = 'devsecops'
@@ -15,20 +18,30 @@ Set-Location $root
 
 if (-not (Get-Command 'minikube' -ErrorAction SilentlyContinue)) { throw 'Minikube is not installed' }
 if (-not (Get-Command 'docker'  -ErrorAction SilentlyContinue)) { throw 'Docker is not installed' }
+if (-not (Get-Command 'kubectl' -ErrorAction SilentlyContinue)) { throw 'kubectl is not installed' }
 
-Write-Host '==> Attaching to Minikube docker daemon (docker-env)...'
-& minikube -p minikube docker-env --shell powershell | Invoke-Expression
+Write-Host '==> Checking Minikube is running...'
+& minikube status *> $null
 if ($LASTEXITCODE -ne 0) {
   Write-Host '==> Minikube is not running. Starting...' -ForegroundColor Yellow
-  & minikube start --driver=docker
-  & minikube -p minikube docker-env --shell powershell | Invoke-Expression
+  & minikube start --driver=docker --container-runtime=containerd
 }
 
-Write-Host '==> Building images (:local)...'
+Write-Host '==> Building images locally (:local)...'
 docker build -t devsecops-platform-gateway:local  ./services/gateway
+if ($LASTEXITCODE -ne 0) { throw 'gateway build failed' }
 docker build -t devsecops-platform-metrics:local ./services/metrics
+if ($LASTEXITCODE -ne 0) { throw 'metrics build failed' }
 docker build -t devsecops-platform-data:local   ./services/data
+if ($LASTEXITCODE -ne 0) { throw 'data build failed' }
 docker build -t devsecops-platform-frontend:local ./frontend
+if ($LASTEXITCODE -ne 0) { throw 'frontend build failed' }
+
+Write-Host '==> Loading images into Minikube...'
+minikube image load devsecops-platform-gateway:local
+minikube image load devsecops-platform-metrics:local
+minikube image load devsecops-platform-data:local
+minikube image load devsecops-platform-frontend:local
 
 Write-Host '==> Applying manifests...'
 kubectl create namespace $Namespace --dry-run=client -o yaml | kubectl apply -f -

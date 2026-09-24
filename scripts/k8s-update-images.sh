@@ -3,8 +3,9 @@
 set -euo pipefail
 
 REGISTRY="${REGISTRY:-ghcr.io}"
-OWNER="${GITHUB_REPOSITORY_OWNER:?GITHUB_REPOSITORY_OWNER is required}"
-REPO="$(basename "${GITHUB_REPOSITORY:-devsecops-platform}")"
+# GHCR вимагає нижній регістр у назві репозиторію
+OWNER="$(printf '%s' "${GITHUB_REPOSITORY_OWNER:?GITHUB_REPOSITORY_OWNER is required}" | tr '[:upper:]' '[:lower:]')"
+REPO="$(basename "${GITHUB_REPOSITORY:-devsecops-platform}" | tr '[:upper:]' '[:lower:]')"
 SHA="${1:?usage: k8s-update-images.sh <commit-sha>}"
 NS="devsecops"
 
