@@ -1,6 +1,6 @@
 streamlit>=1.37,<2
 pandas>=2.2,<3
-requests>=2.32,<3
+requests>=2.34.2,<3
 # Харднінг від Trivy/pip-audit: виправлені версії транзитивних залежностей
 # (GHSA-6v7p-g79w-8964 — msgpack; CVE-2025-47273 — setuptools)
 msgpack>=1.2.1,<2
