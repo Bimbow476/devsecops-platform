@@ -1,45 +1,55 @@
 <#
-Скрипт: налаштування інфраструктури, що потребує прав адміністратора.
-Запускається автоматично з UAC-промптом (не запускай вручну без потреби):
-  1. Вмикає компоненти WSL / VirtualMachinePlatform
-  2. Встановлює WSL2 (дистрибутив Ubuntu за замовчуванням)
-  3. Встановлює Docker Desktop (winget)
-  4. Виконує wsl --update
-Після завершення потрібне ПЕРЕЗАВАНТАЖЕННЯ машини.
+DevSecOps platform - admin environment setup (WSL2 + Docker Desktop)
+Requires: run as Administrator.
+Log file: C:\Users\Administrator\setup-admin.log
+NOTE: keep this file pure ASCII (no Cyrillic) for PowerShell 5.1 compatibility.
 #>
-$ErrorActionPreference = 'Stop'
 
-function Log([string]$msg) { Write-Host "[setup] $msg" -ForegroundColor Cyan }
+$logFile = 'C:\Users\Administrator\setup-admin.log'
+$ErrorActionPreference = 'Continue'
 
-Log 'Перевірка прав адміністратора...'
-$isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-if (-not $isAdmin) { throw 'Потрібен запуск від імені адміністратора!' }
-
-Log 'Вмикання компонентів Windows (WSL + VirtualMachinePlatform)...'
-$features = @('Microsoft-Windows-Subsystem-Linux', 'VirtualMachinePlatform')
-foreach ($f in $features) {
-  $state = (Get-WindowsOptionalFeature -Online -FeatureName $f -ErrorAction SilentlyContinue).State
-  if ($state -ne 'Enabled') {
-    Log "Вмикаю фічу: $f"
-    dism.exe /Online /Enable-Feature /FeatureName:$f /NoRestart /Quiet | Out-Null
-  } else {
-    Log "Фичу $f вже увімкнено."
-  }
+function Log([string]$msg) {
+  $line = "[setup] $(Get-Date -Format 'HH:mm:ss') $msg"
+  Write-Host $line -ForegroundColor Cyan
+  Add-Content -Path $logFile -Value $line -Encoding UTF8
 }
 
-Log 'Встановлення/оновлення WSL2...'
-try {
-  wsl.exe --install --no-distribution 2>&1 | ForEach-Object { Log $_ }
-} catch { Log "wsl --install попередив: $_" }
+"--- setup-admin run $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') ---" | Set-Content -Path $logFile -Encoding UTF8
 
 try {
-  wsl.exe --update 2>&1 | ForEach-Object { Log $_ }
-} catch { Log "wsl --update попередив: $_" }
+  Log 'Checking administrator rights...'
+  $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+  if (-not $isAdmin) { Log 'ERROR: Admin rights required. Aborting.'; exit 1 }
 
-wsl.exe --set-default-version 2 2>&1 | ForEach-Object { Log $_ }
+  Log 'Enabling Windows features (WSL + VirtualMachinePlatform)...'
+  $features = @('Microsoft-Windows-Subsystem-Linux', 'VirtualMachinePlatform')
+  foreach ($f in $features) {
+    try { $state = (Get-WindowsOptionalFeature -Online -FeatureName $f -ErrorAction Stop).State } catch { $state = 'UNKNOWN' }
+    Log "Feature $f state=$state"
+    if ($state -ne 'Enabled') {
+      Log "Enabling feature: $f (dism, may take a few minutes)"
+      dism.exe /Online /Enable-Feature /FeatureName:$f /NoRestart /Quiet | Out-Null
+      Log "dism for $f finished with code $LASTEXITCODE"
+    }
+  }
 
-Log 'Встановлення Docker Desktop через winget...'
-winget install --id Docker.DockerDesktop --accept-source-agreements --accept-package-agreements --silent
-if ($LASTEXITCODE -ne 0) { throw 'winget install Docker Desktop завершився з помилкою' }
+  Log 'Installing/updating WSL2...'
+  $o = wsl.exe --install --no-distribution 2>&1 | Out-String
+  Log ("wsl --install --no-distribution: " + $o.Trim())
+  Log "wsl exit code: $LASTEXITCODE"
 
-Log 'DONE. Перезавантажте машину, після чого в Docker Desktop увімкніть WSL2 backend.'
+  $o = wsl.exe --update 2>&1 | Out-String
+  Log ("wsl --update: " + $o.Trim())
+
+  wsl.exe --set-default-version 2 2>&1 | Out-Null
+
+  Log 'Installing Docker Desktop via winget...'
+  $o = winget install --id Docker.DockerDesktop --accept-source-agreements --accept-package-agreements --silent 2>&1 | Out-String
+  Log ("winget Docker Desktop: " + $o.Trim())
+  Log "winget exit code: $LASTEXITCODE"
+
+  Log 'DONE. Reboot the machine, then enable WSL2 backend in Docker Desktop.'
+} catch {
+  Log "CRITICAL ERROR: $($_.Exception.Message)"
+  Log $_.ScriptStackTrace
+}
