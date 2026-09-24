@@ -12,6 +12,13 @@ build/
 *.db-shm
 services/data/data/
 
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+
 # Середовище та секрети
 .env
 .env.*

@@ -87,23 +87,23 @@ kubectl get nodes
 1.39+ з containerd, де `minikube docker-env` не працює):
 
 ```powershell
-cd devsecops-platform
 .\scripts\minikube-start.ps1   # старт кластера (containerd + ingress)
 .\scripts\deploy.ps1           # збірка образів + image load + apply
-kubectl get pods -n devsecops -o wide   # усі 4 поди мають бути Running
+kubectl get pods -n devsecops -o wide   # усі 5 подів мають бути Running
 ```
 
-Відкрити дашборд:
+Відкрити застосунки:
 
 ```powershell
-minikube service frontend -n devsecops
+kubectl port-forward -n devsecops svc/dota 8501:8501   # Dota 2 Analytics (головний сервіс)
+minikube service frontend -n devsecops                # React-дашборд
 # або через gateway (API):
 minikube service gateway -n devsecops
 ```
 
-Якщо ingress увімкнено, можна відкрити `http://dashboard.local`
+Якщо ingress увімкнено, можна відкрити `http://dashboard.local` та `http://dota.local`
 (для цього додайте у `C:\Windows\System32\drivers\etc\hosts` рядок
-`192.168.49.2  dashboard.local` — IP можна дізнатися через `minikube ip`).
+`192.168.49.2  dashboard.local  dota.local` — IP можна дізнатися через `minikube ip`).
 
 > Маніфести в `k8s/` посилаються на локальний тег `devsecops-platform-*:local`
 > з `imagePullPolicy: IfNotPresent`. CD (GitHub Actions) поверх них ставить
@@ -113,25 +113,16 @@ minikube service gateway -n devsecops
 
 ## 6. GitHub: репозиторій + Actions + Dependabot
 
-1. Створіть порожній репозиторій: <https://github.com/new> → name: `devsecops-platform`.
+1. Репозиторій: <https://github.com/Bimbow476/devsecops-platform> (гілка `main`).
 
-2. Завантажте код:
+2. Код завантажено; CI/CD працюють автоматично на `push`/`pull_request`.
 
-   ```bash
-   cd devsecops-platform
-   git init
-   git add .
-   git commit -m "init: devsecops platform"
-   git branch -M main
-   git remote add origin https://github.com/<USER>/devsecops-platform.git
-   git push -u origin main
-   ```
-
-3. **CI** запуститься автоматично. `cd.yml` (деплой) чекатиме на self-hosted runner.
+3. **CI** запускається автоматично. `cd.yml` (деплой) чекає на self-hosted runner.
 
 4. **Dependabot**:
    - *Security alerts* увімкнено за замовчуванням (GitHub → **Settings → Code security**).
-   - *Version updates* конфігуруються файлом `.github/dependabot.yml` (вже є).
+   - *Version updates* конфігуруються файлом `.github/dependabot.yml`
+     (екосистеми: `npm`, `pip`, `docker`, `github-actions`).
    - Результат: вкладка **Security → Dependabot alerts** + автоматичні PR-виправлення.
 
 ---
@@ -155,8 +146,8 @@ runs-on: [self-hosted, linux, x64, minikube]
 
    ```powershell
    cd C:\actions-runner
-   $token = (gh api -X POST repos/<USER>/devsecops-platform/actions/runners/registration-token | ConvertFrom-Json).token
-   .\config.cmd --url https://github.com/<USER>/devsecops-platform --token $token `
+   $token = (gh api -X POST repos/Bimbow476/devsecops-platform/actions/runners/registration-token | ConvertFrom-Json).token
+   .\config.cmd --url https://github.com/Bimbow476/devsecops-platform --token $token `
      --name win-minikube --labels minikube,linux --unattended --replace
    ```
 
@@ -184,6 +175,8 @@ runs-on: [self-hosted, linux, x64, minikube]
 **repo → Packages** і зробіть пакунки публічними, якщо репозиторій приватний і ви
 хочете тягнути образи на self-hosted runner без додаткової авторизації.
 
+Образи (усі 5 сервісів): `devsecops-platform-{gateway,metrics,data,frontend,dota}`.
+
 ---
 
 ## ⚠️ Часті проблеми
@@ -197,3 +190,5 @@ runs-on: [self-hosted, linux, x64, minikube]
 | `cd.yml` не запускається | Немає self-hosted runner з відповідними мітками (п.7) |
 | Dependabot не створює PR | Перевірте `.github/dependabot.yml` та що репо не в жодному блокуванні |
 | `npm install` блокує скрипти (`allowScripts`) | Новіші npm блокують postinstall за замовчуванням. Для нативних модулів (better-sqlite3): `npm install-scripts approve better-sqlite3 && npm rebuild better-sqlite3` |
+| Dota-под у CrashLoopBackOff | Перевірте `kubectl logs -n devsecops deploy/dota`: Streamlit пише у `$HOME/.streamlit`; у Докерфайлі `HOME=/home/appuser` вже задано |
+| Поди порт-forward відвалилися | Після CD-деплою под перестворюється — перезапустіть `kubectl port-forward` |

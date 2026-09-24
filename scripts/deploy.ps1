@@ -36,12 +36,16 @@ docker build -t devsecops-platform-data:local   ./services/data
 if ($LASTEXITCODE -ne 0) { throw 'data build failed' }
 docker build -t devsecops-platform-frontend:local ./frontend
 if ($LASTEXITCODE -ne 0) { throw 'frontend build failed' }
+# dota - main service: build context is repo root (app.py + dota/)
+docker build -t devsecops-platform-dota:local -f ./dota/Dockerfile .
+if ($LASTEXITCODE -ne 0) { throw 'dota build failed' }
 
 Write-Host '==> Loading images into Minikube...'
 minikube image load devsecops-platform-gateway:local
 minikube image load devsecops-platform-metrics:local
 minikube image load devsecops-platform-data:local
 minikube image load devsecops-platform-frontend:local
+minikube image load devsecops-platform-dota:local
 
 Write-Host '==> Applying manifests...'
 kubectl create namespace $Namespace --dry-run=client -o yaml | kubectl apply -f -
@@ -52,6 +56,7 @@ kubectl rollout status deploy/gateway -n $Namespace --timeout=240s
 kubectl rollout status deploy/metrics -n $Namespace --timeout=240s
 kubectl rollout status deploy/data -n $Namespace --timeout=240s
 kubectl rollout status deploy/frontend -n $Namespace --timeout=240s
+kubectl rollout status deploy/dota -n $Namespace --timeout=240s
 
 Write-Host '==> Pods:'
 kubectl get pods -n $Namespace -o wide
@@ -59,6 +64,8 @@ kubectl get pods -n $Namespace -o wide
 Write-Host ''
 Write-Host 'Open the dashboard:' -ForegroundColor Green
 Write-Host "  minikube service frontend -n $Namespace"
+Write-Host 'Open Dota 2 Analytics (main service):'
+Write-Host "  kubectl port-forward -n $Namespace svc/dota 8501:8501"
 Write-Host ''
 Write-Host 'Check gateway via tunnel (optional):'
 Write-Host "  kubectl port-forward -n $Namespace svc/gateway 8080:8080"

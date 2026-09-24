@@ -1,12 +1,15 @@
-# 🛡️ DevSecOps Monitor — мікросервісна платформа
+# 🛡️ DevSecOps платформа — аналітика та прогнозування матчів Dota 2
 
 Курсова робота: **дослідження та реалізація архітектури стійкої клієнт-серверної взаємодії
-та безпечної безперервної доставки (DevSecOps)** для масштабованої мікросервісної платформи
-з інтерактивним веб-інтерфейсом.
+та безпечної безперервної доставки (DevSecOps)** для масштабованої мікросервісної платформи.
 
-Платформа складається з React-дашборда, трьох мікросервісів (Node.js + TypeScript),
-Docker-конвеєра, локального Kubernetes-кластера (Minikube) та конвеєра CI/CD на
-GitHub Actions із вбудованими перевірками безпеки (Dependabot, Trivy, npm audit, CodeQL).
+**Головний сервіс платформи — інформаційна система аналітики Dota 2** (`app.py`, Streamlit):
+аналіз зіграних матчів через OpenDota API, симулятор драфту (прогноз переможця за вінрейтами),
+персональний архів прогнозів (SQLite) з авторизацією користувачів.
+
+Навколо нього — повний DevSecOps-стек: React-дашборд, мікросервіси (Node.js + TypeScript),
+Docker-конвеєр, Kubernetes (Minikube) і CI/CD на GitHub Actions із перевірками безпеки
+(Dependabot, Trivy, npm audit, pip-audit, CodeQL).
 
 ---
 
@@ -15,6 +18,7 @@ GitHub Actions із вбудованими перевірками безпеки
 ```mermaid
 flowchart LR
     U[Користувач] -->|HTTP| NGINX[frontend: nginx + React SPA]
+    U -->|"dota.local / port-forward :8501"| DOTA[Dota 2 Analytics — Streamlit, головний сервіс]
     NGINX -->|/api/*| GW[API Gateway :8080]
 
     subgraph platform[Мікросервісна платформа]
@@ -22,17 +26,19 @@ flowchart LR
         GW -->|proxy /api/data| DS[Data Service :8082]
         GW -->|aggregates /api/status| MS
         GW -->|aggregates /api/status| DS
-        DS --> DB[(SQLite)]
+        DS --> DB[(records.db)]
+        DOTA --> DB2[(dota_analytics.db)]
     end
 
     subgraph ci[CI/CD — GitHub Actions]
-        CI[ci.yml: lint → test → npm audit → Docker build → Trivy → GHCR]
-        SAST[CodeQL]
-        DEP[Dependabot: npm + docker + github-actions]
+        CI[ci.yml: Node + pytest → npm audit → pip-audit → Docker build → Trivy → GHCR]
+        SAST[CodeQL: javascript-typescript + python]
+        DEP[Dependabot: npm + pip + docker + github-actions]
         CD[cd.yml: deploy на self-hosted runner → Minikube]
     end
 
     NGINX -->|"npm (збірка...)"| CI
+    DOTA -->|"pytest (Dota)"| CI
     CI --> CD
     DEP -->|Security Alerts + PR оновлень| CI
 ```
@@ -42,11 +48,11 @@ flowchart LR
 | Патерн | Реалізація |
 |---|---|
 | API Gateway | Єдина точка входу, проксіювання `/api/metrics`, `/api/data`, агрегація `/api/status` |
-| Health checks | `/health` у кожного сервісу + liveness/readiness проби в Kubernetes |
+| Health checks | `/health` у кожного сервісу + `/_stcore/health` у Dota + probes у Kubernetes |
 | Graceful degradation | Дашборд не падає при збої сервісу — показує статус `DOWN` |
 | Retry з exponential backoff | `usePolling` у фронтенді: при помилці інтервал ×2 (до ×8) |
 | Stateless сервіси | Можливість горизонтального масштабування (`replicas`) |
-| Конфігурація поза кодом | Env / ConfigMap (`k8s/configmap.yaml`) |
+| Конфігурація поза кодом | Env / ConfigMap (`k8s/configmap.yaml`), `DOTA_DB_PATH` для БД |
 | Graceful shutdown | Обробка `SIGTERM`/`SIGINT` у сервісах |
 
 ---
@@ -55,20 +61,27 @@ flowchart LR
 
 ```
 devsecops-platform/
+├── app.py                     # 🎯 ГОЛОВНИЙ СЕРВІС — Dota 2 Analytics (Streamlit)
+├── dota/                      # Python-модулі головного сервісу
+│   ├── db.py                  #   SQLite: users + prediction_history (шлях через DOTA_DB_PATH)
+│   ├── predict.py             #   розрахунок ймовірності перемоги драфту
+│   ├── requirements.txt
+│   └── Dockerfile             #   non-root, slim, python:3.12 + probes
+├── tests/                     # pytest: dota.db + dota.predict
 ├── frontend/                  # React + Vite + TypeScript + Recharts (дашборд)
 ├── services/
 │   ├── gateway/               # API Gateway: проксі + агрегація статусу
 │   ├── metrics/               # системні метрики (CPU/RAM/loadavg) та процеси
 │   └── data/                  # CRUD дані (SQLite) + валідація zod
-├── k8s/                       # Kubernetes-маніфести (namespace, deployments, ingress)
+├── k8s/                       # Kubernetes-маніфести (namespace, deployments + dota, ingress)
 ├── .github/
-│   ├── dependabot.yml         # Dependabot: npm, docker, github-actions
+│   ├── dependabot.yml         # Dependabot: npm, pip, docker, github-actions
 │   └── workflows/
-│       ├── ci.yml             # збірка, тести, npm audit, Docker+Trivy, GHCR
+│       ├── ci.yml             # Node+Python тести, npm audit, pip-audit, Docker+Trivy, GHCR
 │       ├── cd.yml             # деплой на self-hosted runner (Minikube)
-│       └── codeql.yml         # SAST-аналіз
+│       └── codeql.yml         # SAST-аналіз (JS/TS + Python)
 ├── scripts/                   # minikube-start.ps1, deploy.ps1, k8s-update-images.sh
-├── docker-compose.yml         # локальний запуск усієї платформи
+├── docker-compose.yml         # локальний запуск усієї платформи (5 сервісів)
 ├── SETUP.md                   # інсталяція середовища (крок за кроком)
 └── README.md
 ```
@@ -79,7 +92,14 @@ devsecops-platform/
 
 ### 1. Локальна розробка (без Docker)
 
-Потрібен Node.js ≥ 20. Запустіть у чотирьох терміналах:
+**Головний сервіс (Python 3.12 + Streamlit):**
+
+```bash
+pip install -r dota/requirements.txt
+streamlit run app.py            # http://localhost:8501
+```
+
+**Платформа (React + мікросервіси, Node.js ≥ 20)** — у чотирьох терміналах:
 
 ```bash
 cd services/metrics  && npm install && npm run dev   # :8081
@@ -104,7 +124,8 @@ $env:METRICS_URL="http://localhost:8081"; $env:DATA_URL="http://localhost:8082"
 
 ```bash
 docker compose up --build
-# Дашборд: http://localhost:3000   Gateway API: http://localhost:8080
+# Дашборд: http://localhost:3000   Dota 2 Analytics: http://localhost:8501
+# Gateway API: http://localhost:8080
 ```
 
 ### 3. Minikube (локальний кластер)
@@ -112,28 +133,23 @@ docker compose up --build
 ```powershell
 .\scripts\minikube-start.ps1   # старт кластера + ingress
 .\scripts\deploy.ps1           # збірка образів :local + kubectl apply
-minikube service frontend -n devsecops   # відкрити дашборд
+kubectl port-forward -n devsecops svc/dota 8501:8501        # Dota 2 Analytics (головний сервіс)
+minikube service frontend -n devsecops                     # React-дашборд
 ```
 
 ### 4. CI/CD (GitHub)
 
-1. Створіть репозиторій на GitHub, наприклад `devsecops-platform`, і завантажте код:
+1. Репозиторій на GitHub, гілка `main`, код уже завантажено — CI/CD працюють автоматично.
 
-   ```bash
-   git init && git add . && git commit -m "init: devsecops platform"
-   git branch -M main
-   git remote add origin https://github.com/<USER>/devsecops-platform.git
-   git push -u origin main
-   ```
+2. Далі автоматично працюють:
+   - **CI** — Node-тести + pytest (Dota) + збірка/сканування на `push` і `pull_request`;
+   - **CodeQL** — SAST-аналіз JS/TS та Python;
+   - **Dependabot** — Security Alerts (вкладка *Security*) та PR оновлень залежностей
+     (`npm`, `pip`, `docker`, `github-actions`).
 
-2. Далі автоматично почнуть працювати:
-   - **CI** — збірка/тести/сканування на `push` і `pull_request`;
-   - **CodeQL** — SAST-аналіз;
-   - **Dependabot** — Security Alerts (вкладка *Security*) та PR оновлень залежностей.
-
-3. Для деплою в локальний Minikube з GitHub зареєструйте **self-hosted runner**
-   з міткою `minikube` (інструкція — у `SETUP.md`). Після цього `cd.yml` оновлюватиме
-   образи та застосовуватиме маніфести автоматично.
+3. Для деплою в локальний Minikube з GitHub зареєстрований **self-hosted runner**
+   з міткою `minikube` (інструкція — у `SETUP.md`). Після цього `cd.yml` оновлює
+   образи та застосовує маніфести автоматично.
 
 ---
 
@@ -142,7 +158,8 @@ minikube service frontend -n devsecops   # відкрити дашборд
 | Етап пайплайну | Інструмент | Що виявляє | Де |
 |---|---|---|---|
 | Планування залежностей | **Dependabot** | CVE у версіях бібліотек, автоматичні PR | GitHub Security |
-| Залежності (локально/CI) | `npm audit --audit-level=high` | вразливості npm-залежностей | `ci.yml` |
+| Залежності (Node, CI) | `npm audit --audit-level=high` | вразливості npm-залежностей | `ci.yml` |
+| Залежності (Python, CI) | `pip-audit` | вразливості Python-залежностей (Dota) | `ci.yml` |
 | Статичний аналіз | **CodeQL** | SQL-ін'єкції, XSS, небезпечні потоки даних | `codeql.yml` |
 | Docker-образи | **Trivy** | CVE у базових образах та шарах | `ci.yml` (fail on CRITICAL/HIGH) |
 | Рантайм | non-root user, probes, resource limits | мінімізація поверхні атаки | Dockerfile / `k8s/*` |
@@ -153,9 +170,9 @@ minikube service frontend -n devsecops   # відкрити дашборд
 |---|---|
 | Dependabot Security Alerts | Сповіщення у вкладці **Security** про вразливі залежності |
 | Dependabot Security Updates | Автоматичні PR-виправлення для критичних CVE |
-| Dependabot Version Updates | Щотижневі PR оновлень для `npm`, `docker`, `github-actions` |
+| Dependabot Version Updates | Щотижневі PR оновлень для `npm`, `pip`, `docker`, `github-actions` |
 | Trivy у CI | Блокування мерджа образу з CRITICAL/HIGH CVE |
-| `npm audit` у CI | Провал кроку при вразливостях високого рівня |
+| `npm audit` / `pip-audit` у CI | Провал кроку при вразливостях високого рівня |
 
 #### Приклад: SCA виявив і виправив реальну CVE (під час розробки)
 
@@ -175,6 +192,7 @@ minikube service frontend -n devsecops   # відкрити дашборд
 | Метод | Шлях | Опис |
 |---|---|---|
 | GET | `/health` | Health-перевірка сервісу |
+| GET | `/_stcore/health` | Health-перевірка Dota (Streamlit) |
 | GET | `/api/status` | **Gateway:** стан усіх сервісів + процеси |
 | GET | `/api/metrics` | **Gateway→metrics:** системні метрики |
 | GET | `/api/data/records` | **Gateway→data:** список записів (`?search=&status=&limit=&offset=`) |
@@ -183,15 +201,19 @@ minikube service frontend -n devsecops   # відкрити дашборд
 | PUT | `/api/data/records/:id` | Оновити запис |
 | DELETE | `/api/data/records/:id` | Видалити запис |
 
+Dota 2 Analytics (Streamlit) — власний UI: `http://localhost:8501` (або `dota.local` через ingress).
+
 ---
 
 ## ✅ Що зроблено / критерії виконання
 
+- [x] 🎯 Головний сервіс: ІС аналітики Dota 2 (Streamlit + SQLite + OpenDota API), pytest-покриття
 - [x] Мікросервісна платформа (gateway + metrics + data), TypeScript
 - [x] React-дашборд: моніторинг процесів/метрик + CRUD управління даними
 - [x] Стійка клієнт-серверна взаємодія (health checks, backoff, graceful degradation)
-- [x] Docker + docker-compose + багатоетапні збірки
-- [x] Kubernetes-маніфести для Minikube (probes, limits, configmap, ingress)
-- [x] GitHub Actions: CI (build/test/audit/Trivy/GHCR) + CD (self-hosted) + CodeQL
-- [x] Dependabot для npm/docker/github-actions (Security Alerts + auto-updates)
-- [ ] *Фізичний* запуск кластера Minikube — після налаштування віртуалізації (SETUP.md)
+- [x] Docker + docker-compose (усі 5 сервісів, non-root) + багатоетапні збірки
+- [x] Kubernetes-маніфести для Minikube (5 deployment'ів, probes, limits, configmap, ingress)
+- [x] GitHub Actions: CI (Node+Python тести, npm audit, pip-audit, Trivy, GHCR) +
+      CD (self-hosted) + CodeQL (JS/TS + Python)
+- [x] Dependabot для npm/pip/docker/github-actions (Security Alerts + auto-updates)
+- [x] Фізичний запуск кластера Minikube + деплой через CD

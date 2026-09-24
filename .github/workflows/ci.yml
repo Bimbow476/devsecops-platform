@@ -10,7 +10,7 @@ env:
   REGISTRY: ghcr.io
 
 jobs:
-  # ---------- Збірка, тести та SCA-аудит залежностей ----------
+  # ---------- Збірка, тести та SCA-аудит залежностей (Node.js сервіси) ----------
   build-test:
     name: Build & test (${{ matrix.dir }})
     runs-on: ubuntu-latest
@@ -44,10 +44,38 @@ jobs:
         working-directory: ${{ matrix.dir }}
         run: npm audit --audit-level=high
 
+  # ---------- Тести головного Python-сервісу (Dota 2 Analytics) ----------
+  dota-test:
+    name: Dota app tests (Python)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: dota/requirements.txt
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r dota/requirements.txt pytest
+
+      - name: Run tests (pytest)
+        run: pytest tests/ -v
+
+      # Shift-left: SCA-аудит Python-залежностей (аналог npm audit)
+      - name: Dependency vulnerability audit (pip-audit)
+        run: |
+          pip install pip-audit
+          pip-audit -r dota/requirements.txt \
+            || echo "::warning::pip-audit: знайдені вразливості Python-залежностей (див. лог вище)"
+
   # ---------- Збірка Docker-образів, сканування Trivy та публікація в GHCR ----------
   docker:
     name: Build & publish image (${{ matrix.service }})
-    needs: build-test
+    needs: [build-test, dota-test]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -55,7 +83,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        service: [gateway, metrics, data, frontend]
+        service: [gateway, metrics, data, frontend, dota]
     steps:
       - uses: actions/checkout@v4
 
@@ -74,12 +102,12 @@ jobs:
           REPO="${{ github.repository }}"
           echo "name=ghcr.io/${REPO,,}-${{ matrix.service }}" >> "$GITHUB_OUTPUT"
 
-      # context: frontend знаходиться в корені, сервіси — у services/<name>
+      # context: frontend та dota — у корені репо; інші сервіси — у services/<name>
       - name: Build and push image
         uses: docker/build-push-action@v6
         with:
-          context: ${{ matrix.service == 'frontend' && 'frontend' || format('services/{0}', matrix.service) }}
-          file: ${{ matrix.service == 'frontend' && 'frontend/Dockerfile' || format('services/{0}/Dockerfile', matrix.service) }}
+          context: ${{ matrix.service == 'frontend' && 'frontend' || matrix.service == 'dota' && '.' || format('services/{0}', matrix.service) }}
+          file: ${{ matrix.service == 'frontend' && 'frontend/Dockerfile' || matrix.service == 'dota' && 'dota/Dockerfile' || format('services/{0}/Dockerfile', matrix.service) }}
           push: true
           tags: |
             ${{ steps.image.outputs.name }}:sha-${{ github.sha }}

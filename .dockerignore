@@ -1,0 +1,14 @@
+# Використовується при збірці образу dota (context: корінь репозиторію),
+# щоб не надсилати у build context зайве.
+.git
+**/node_modules
+**/dist
+**/build
+**/__pycache__
+**/.pytest_cache
+.venv
+tests
+*.db
+*.log
+.env
+.env.*

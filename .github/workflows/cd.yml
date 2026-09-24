@@ -8,6 +8,8 @@ on:
       - 'k8s/**'
       - 'services/**'
       - 'frontend/**'
+      - 'dota/**'
+      - 'app.py'
       - '.github/workflows/ci.yml'
       - '.github/workflows/cd.yml'
 

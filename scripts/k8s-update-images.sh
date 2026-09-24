@@ -9,11 +9,11 @@ REPO="$(basename "${GITHUB_REPOSITORY:-devsecops-platform}" | tr '[:upper:]' '[:
 SHA="${1:?usage: k8s-update-images.sh <commit-sha>}"
 NS="devsecops"
 
-for svc in gateway metrics data frontend; do
+for svc in gateway metrics data frontend dota; do
   img="${REGISTRY}/${OWNER}/${REPO}-${svc}:sha-${SHA}"
   echo "==> deployment/${svc} -> ${img}"
   kubectl -n "${NS}" set image "deployment/${svc}" "${svc}=${img}"
 done
 
-kubectl -n "${NS}" rollout status deployment/gateway deployment/metrics deployment/data deployment/frontend --timeout=240s
+kubectl -n "${NS}" rollout status deployment/gateway deployment/metrics deployment/data deployment/frontend deployment/dota --timeout=240s
 kubectl -n "${NS}" get pods -o wide

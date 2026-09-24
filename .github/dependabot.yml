@@ -29,6 +29,14 @@ updates:
     open-pull-requests-limit: 10
     labels: ["dependencies", "npm"]
 
+  # --- Python (головний Dota-сервіс) ---
+  - package-ecosystem: pip
+    directory: /dota
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    labels: ["dependencies", "python"]
+
   # --- Docker (Dockerfile + базові образи) ---
   - package-ecosystem: docker
     directory: /services/gateway
@@ -50,6 +58,12 @@ updates:
 
   - package-ecosystem: docker
     directory: /frontend
+    schedule:
+      interval: weekly
+    labels: ["dependencies", "docker"]
+
+  - package-ecosystem: docker
+    directory: /dota
     schedule:
       interval: weekly
     labels: ["dependencies", "docker"]

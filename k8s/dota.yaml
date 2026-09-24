@@ -1,0 +1,73 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dota
+  namespace: devsecops
+  labels:
+    app: dota
+    app.kubernetes.io/part-of: devsecops-platform
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dota
+  template:
+    metadata:
+      labels:
+        app: dota
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+      containers:
+        - name: dota
+          image: devsecops-platform-dota:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8501
+              name: http
+          env:
+            - name: DOTA_DB_PATH
+              value: "/app/data/dota_analytics.db"
+          volumeMounts:
+            - name: dota-data
+              mountPath: /app/data
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          livenessProbe:
+            httpGet:
+              path: /_stcore/health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /_stcore/health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 5
+      volumes:
+        - name: dota-data
+          # Для продакшну рекомендується PVC; emptyDir — демо-вибір.
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dota
+  namespace: devsecops
+  labels:
+    app: dota
+spec:
+  selector:
+    app: dota
+  ports:
+    - name: http
+      port: 8501
+      targetPort: 8501

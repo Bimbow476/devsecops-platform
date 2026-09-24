@@ -57,5 +57,24 @@ services:
       timeout: 3s
       retries: 3
 
+  # Головний сервіс — Dota 2 Analytics (Streamlit, Python)
+  dota:
+    build:
+      context: .
+      dockerfile: dota/Dockerfile
+    image: devsecops-platform-dota:local
+    environment:
+      DOTA_DB_PATH: "/app/data/dota_analytics.db"
+    volumes:
+      - dota-data:/app/data
+    ports:
+      - "8501:8501"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8501/_stcore/health', timeout=3).status == 200 else 1)"]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+
 volumes:
   data-volume:
+  dota-data:
