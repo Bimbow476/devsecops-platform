@@ -29,15 +29,19 @@ jobs:
           kubectl config current-context
           kubectl get nodes -o wide
 
-      - name: Update images to current commit
-        run: |
-          chmod +x ./scripts/k8s-update-images.sh
-          ./scripts/k8s-update-images.sh "${{ github.sha }}"
-
       - name: Apply Kubernetes manifests
+        # Порядок важливий: спершу apply, потім set image. Якщо зробити навпаки,
+        # kubectl apply перезапише image на локальний тег :local з маніфестів
+        # (3-way merge повертає поле до значення з маніфесту).
         run: |
           kubectl apply -f k8s/namespace.yaml
           kubectl apply -f k8s/
+
+      - name: Update images to current commit (override :local)
+        run: |
+          chmod +x ./scripts/k8s-update-images.sh
+          ./scripts/k8s-update-images.sh "${{ github.sha }}"
+        shell: bash
 
       - name: Show deployment status
         run: kubectl get pods -n "${{ env.NAMESPACE }}" -o wide
