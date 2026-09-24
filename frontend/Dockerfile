@@ -11,7 +11,9 @@ COPY src ./src
 RUN npm run build
 
 # ---------- Стадія виконання (nginx) ----------
-FROM nginx:1.27-alpine
+FROM nginx:1.29-alpine
+# Харднінг: одразу оновлюємо OS-пакети до останніх патчів (Trivy/CI вимога)
+RUN apk upgrade --no-cache
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/dist /usr/share/nginx/html
 EXPOSE 80

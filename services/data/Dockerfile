@@ -11,6 +11,8 @@ RUN apt-get update \
 COPY tsconfig.json ./
 COPY src ./src
 RUN npm run build
+# Прибираємо dev-залежності (typescript та ін.) з node_modules перед копіюванням у рантайм
+RUN npm prune --omit=dev
 
 # ---------- Стадія виконання ----------
 FROM node:22-bookworm-slim AS runtime
@@ -20,7 +22,10 @@ COPY package.json package-lock.json ./
 # Краще-sqlite3 збирається/копіюється з build-стадії (сумісність ABI гарантована базовим образом)
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
-RUN chown -R node:node /app && mkdir -p /data && chown node:node /data
+# Харднінг: npm та lockfile не потрібні в рантаймі (Trivy не бачить dev-дерева)
+RUN chown -R node:node /app && mkdir -p /data && chown node:node /data \
+    && rm -f /app/package-lock.json \
+    && rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 # runAsNonRoot у K8s вимагає числовий UID (node => 1000)
 USER 1000
 ENV PORT=8082

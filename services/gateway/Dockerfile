@@ -14,7 +14,11 @@ FROM node:22-bookworm-slim AS runtime
 ENV NODE_ENV=production
 WORKDIR /app
 COPY package.json package-lock.json ./
-RUN npm ci --omit=dev && npm cache clean --force
+# Харднінг: npm та lockfile не потрібні в рантаймі (Trivy не бачить dev-дерева)
+RUN npm ci --omit=dev \
+    && npm cache clean --force \
+    && rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx \
+    && rm -f package-lock.json
 COPY --from=build /app/dist ./dist
 # runAsNonRoot у K8s вимагає числовий UID (node => 1000)
 USER 1000
