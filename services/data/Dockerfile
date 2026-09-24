@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 # ---------- Стадія збірки (з інструментами для нативної збірки better-sqlite3) ----------
-FROM node:22-bookworm-slim AS build
+FROM node:25-bookworm-slim AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN apt-get update \
@@ -15,7 +15,7 @@ RUN npm run build
 RUN npm prune --omit=dev
 
 # ---------- Стадія виконання ----------
-FROM node:22-bookworm-slim AS runtime
+FROM node:25-bookworm-slim AS runtime
 ENV NODE_ENV=production
 WORKDIR /app
 COPY package.json package-lock.json ./
