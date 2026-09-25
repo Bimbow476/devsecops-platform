@@ -331,66 +331,21 @@ def render_security() -> None:
         st.write("\n".join(f"- {p}" for p in practices))
 
 
-# ================= БІЧНА ПАНЕЛЬ: ПРОФІЛЬ / ВХІД =================
-with st.sidebar:
-    st.title("Профіль")
-    if st.session_state.logged_in:
-        st.write(f"Ви увійшли як: **{st.session_state.username}**")
-        if st.sidebar.button("Вийти з системи"):
-            st.session_state.logged_in = False
-            st.session_state.username = ""
-            st.rerun()
-    else:
-        st.caption("Вхід потрібен лише для розділу аналітики Dota 2.")
-        with st.expander("Вхід", expanded=True):
-            login_username = st.text_input("Логін", key="login_user")
-            login_password = st.text_input("Пароль", type="password", key="login_pass")
-            if st.button("Увійти", use_container_width=True):
-                if db.login_user(login_username, login_password):
-                    st.session_state.logged_in = True
-                    st.session_state.username = login_username
-                    st.rerun()
-                else:
-                    st.error("Невірний логін або пароль")
-        with st.expander("Реєстрація"):
-            new_username = st.text_input("Новий логін", key="reg_user")
-            new_password = st.text_input("Новий пароль", type="password", key="reg_pass")
-            if st.button("Зареєструватися", use_container_width=True):
-                if new_username and new_password:
-                    if db.add_user(new_username, new_password):
-                        st.success("Реєстрація успішна! Перейдіть у вкладку «Вхід».")
-                    else:
-                        st.error("Користувач з таким логіном вже існує.")
-                else:
-                    st.warning("Будь ласка, заповніть всі поля.")
+# ================= СТОРІНКА 1 (ГОЛОВНА): АНАЛІТИКА DOTA 2 =================
+def page_analytics() -> None:
+    st.title("Інформаційна система аналітики Dota 2")
+    st.caption(
+        "Головна сторінка головного сервісу платформи: аналіз зіграних матчів "
+        "через OpenDota API, симулятор драфту (прогноз переможця за вінрейтами) "
+        "та персональний архів прогнозів. Розділ доступний після входу."
+    )
 
-
-# ================= ГОЛОВНИЙ ВМІСТ =================
-st.title("Інформаційна система аналітики Dota 2")
-st.caption(
-    "Головний сервіс мікросервісної DevSecOps-платформи. "
-    "Публічні розділи: моніторинг платформи, управління даними та "
-    "контроль вразливостей. Аналітика матчів — після входу."
-)
-
-tab_mon, tab_data, tab_sec = st.tabs(
-    ["📊 Моніторинг платформи", "🗄️ Управління даними", "🛡️ Безпека / DevSecOps"]
-)
-
-with tab_mon:
-    render_monitoring(client)
-
-with tab_data:
-    render_data(client)
-
-with tab_sec:
-    render_security()
-
-
-# ================= АНАЛІТИКА (ПІСЛЯ ВХОДУ) =================
-if st.session_state.logged_in:
-    st.divider()
-    st.subheader("Аналітика матчів Dota 2")
+    if not st.session_state.logged_in:
+        st.info(
+            "🔒 Аналітика Dota 2 доступна після входу. Зареєструйтеся та увійдіть "
+            "у бічній панелі зліва (розділи «Вхід» / «Реєстрація»)."
+        )
+        return
 
     heroes_data = load_heroes_data()
     items_data = load_items_data()
@@ -602,3 +557,70 @@ if st.session_state.logged_in:
                 st.rerun()
         else:
             st.info("Ваша історія симуляцій порожня. Зробіть свій перший прогноз!")
+
+
+# ================= СТОРІНКА 2: ПЛАТФОРМА DEVSECOPS =================
+def page_platform() -> None:
+    st.title("Платформа DevSecOps")
+    st.caption(
+        "Публічні розділи головного сервісу (доступні без входу): моніторинг "
+        "мікросервісної платформи, управління даними через data-сервіс та "
+        "проактивний контроль вразливостей."
+    )
+
+    tab_mon, tab_data, tab_sec = st.tabs(
+        ["📊 Моніторинг платформи", "🗄️ Управління даними", "🛡️ Безпека / DevSecOps"]
+    )
+
+    with tab_mon:
+        render_monitoring(client)
+
+    with tab_data:
+        render_data(client)
+
+    with tab_sec:
+        render_security()
+
+
+# ================= НАВІГАЦІЯ МІЖ СТОРІНКАМИ =================
+pg = st.navigation(
+    [
+        st.Page(page_analytics, title="Аналітика Dota 2", icon="🎮", default=True),
+        st.Page(page_platform, title="Платформа DevSecOps", icon="🛠"),
+    ]
+)
+pg.run()
+
+
+# ================= БІЧНА ПАНЕЛЬ: ПРОФІЛЬ / ВХІД (спільна для обох сторінок) =================
+with st.sidebar:
+    st.title("Профіль")
+    if st.session_state.logged_in:
+        st.write(f"Ви увійшли як: **{st.session_state.username}**")
+        if st.sidebar.button("Вийти з системи"):
+            st.session_state.logged_in = False
+            st.session_state.username = ""
+            st.rerun()
+    else:
+        st.caption("Вхід потрібен лише для розділу аналітики Dota 2.")
+        with st.expander("Вхід", expanded=True):
+            login_username = st.text_input("Логін", key="login_user")
+            login_password = st.text_input("Пароль", type="password", key="login_pass")
+            if st.button("Увійти", use_container_width=True):
+                if db.login_user(login_username, login_password):
+                    st.session_state.logged_in = True
+                    st.session_state.username = login_username
+                    st.rerun()
+                else:
+                    st.error("Невірний логін або пароль")
+        with st.expander("Реєстрація"):
+            new_username = st.text_input("Новий логін", key="reg_user")
+            new_password = st.text_input("Новий пароль", type="password", key="reg_pass")
+            if st.button("Зареєструватися", use_container_width=True):
+                if new_username and new_password:
+                    if db.add_user(new_username, new_password):
+                        st.success("Реєстрація успішна! Перейдіть у вкладку «Вхід».")
+                    else:
+                        st.error("Користувач з таким логіном вже існує.")
+                else:
+                    st.warning("Будь ласка, заповніть всі поля.")
