@@ -13,6 +13,12 @@ on:
 
 jobs:
   analyze:
+    # Dependabot і pull requests from forks не мають токена для upload SARIF.
+    # Не перетворюємо оновлення залежностей на failed check через write-upload.
+    if: >-
+      github.event_name != 'pull_request' ||
+      (github.event.pull_request.head.repo.full_name == github.repository &&
+       github.actor != 'dependabot[bot]')
     name: Analyze
     runs-on: ubuntu-latest
     permissions:

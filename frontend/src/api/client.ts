@@ -1,4 +1,19 @@
-import type { RecordInput, RecordItem, RecordsPage, ServiceStatus, SystemMetrics } from '../types';
+import type {
+  CreateProjectInput,
+  CreateTaskInput,
+  Project,
+  ProjectPatch,
+  ProjectsPage,
+  ProjectsQuery,
+  ServiceStatus,
+  SystemMetrics,
+  Task,
+  TaskPatch,
+  TasksPage,
+  TasksQuery,
+  UpdateProjectInput,
+  UpdateTaskInput,
+} from '../types';
 
 const TIMEOUT_MS = 5000;
 
@@ -29,28 +44,83 @@ export async function apiSend<T>(
   return (await res.json()) as T;
 }
 
-export interface RecordsQuery {
-  search?: string;
-  status?: string;
-  offset?: number;
-  limit?: number;
+export type { ProjectsQuery, TasksQuery };
+
+function withQuery(path: string, query: ProjectsQuery | TasksQuery = {}): string {
+  const params = new URLSearchParams();
+  if (query.search?.trim()) params.set('search', query.search.trim());
+  if (query.status) params.set('status', query.status);
+  if (query.limit !== undefined) params.set('limit', String(query.limit));
+  if (query.offset !== undefined) params.set('offset', String(query.offset));
+  const qs = params.toString();
+  return `${path}${qs ? `?${qs}` : ''}`;
 }
+
+async function requiredResponse<T>(promise: Promise<T | null>): Promise<T> {
+  const result = await promise;
+  if (result === null) throw new Error('API error: очікувалися дані, але відповідь була порожньою');
+  return result;
+}
+
+const listProjects = (query: ProjectsQuery = {}) =>
+  apiGet<ProjectsPage>(withQuery('/api/data/projects', query));
+
+const fetchProject = (id: number) => apiGet<Project>(`/api/data/projects/${id}`);
+
+const listProjectTasks = async (
+  projectId: number,
+  query: TasksQuery = {},
+): Promise<TasksPage> => {
+  // The page shape is the public contract. Accepting a bare array as well keeps
+  // the client compatible with older data-service versions during rollout.
+  const result = await apiGet<TasksPage | Task[]>(
+    withQuery(`/api/data/projects/${projectId}/tasks`, query),
+  );
+  if (Array.isArray(result)) {
+    return { items: result, total: result.length, limit: result.length, offset: 0 };
+  }
+  return result;
+};
+
+const createProject = (input: CreateProjectInput) =>
+  requiredResponse(apiSend<Project>('/api/data/projects', 'POST', input));
+
+const updateProject = (id: number, patch: UpdateProjectInput | ProjectPatch) =>
+  requiredResponse(apiSend<Project>(`/api/data/projects/${id}`, 'PUT', patch));
+
+const deleteProject = (id: number) => apiSend<void>(`/api/data/projects/${id}`, 'DELETE');
+
+const createTask = (projectId: number, input: CreateTaskInput) =>
+  requiredResponse(apiSend<Task>(`/api/data/projects/${projectId}/tasks`, 'POST', input));
+
+const fetchTask = (id: number) => apiGet<Task>(`/api/data/tasks/${id}`);
+
+const updateTask = (id: number, patch: UpdateTaskInput | TaskPatch) =>
+  requiredResponse(apiSend<Task>(`/api/data/tasks/${id}`, 'PUT', patch));
+
+const deleteTask = (id: number) => apiSend<void>(`/api/data/tasks/${id}`, 'DELETE');
 
 export const api = {
   status: () => apiGet<ServiceStatus[]>('/api/status'),
   metrics: () => apiGet<SystemMetrics>('/api/metrics'),
-  records: (query: RecordsQuery = {}) => {
-    const params = new URLSearchParams();
-    if (query.search) params.set('search', query.search);
-    if (query.status) params.set('status', query.status);
-    if (query.limit !== undefined) params.set('limit', String(query.limit));
-    if (query.offset !== undefined) params.set('offset', String(query.offset));
-    const qs = params.toString();
-    return apiGet<RecordsPage>(`/api/data/records${qs ? `?${qs}` : ''}`);
-  },
-  createRecord: (input: RecordInput) =>
-    apiSend<RecordItem>('/api/data/records', 'POST', input),
-  updateRecord: (id: number, patch: RecordInput) =>
-    apiSend<RecordItem>(`/api/data/records/${id}`, 'PUT', patch),
-  deleteRecord: (id: number) => apiSend<void>(`/api/data/records/${id}`, 'DELETE'),
+
+  projects: listProjects,
+  listProjects,
+  getProjects: listProjects,
+  project: fetchProject,
+  getProject: fetchProject,
+  createProject,
+  updateProject,
+  deleteProject,
+
+  projectTasks: listProjectTasks,
+  listTasks: listProjectTasks,
+  tasks: listProjectTasks,
+  getProjectTasks: listProjectTasks,
+  getTasks: listProjectTasks,
+  createTask,
+  task: fetchTask,
+  getTask: fetchTask,
+  updateTask,
+  deleteTask,
 };

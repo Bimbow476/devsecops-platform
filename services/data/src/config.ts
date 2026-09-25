@@ -19,6 +19,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     port: parsePort(env.PORT, 8082),
     serviceName: env.SERVICE_NAME ?? 'data',
     version: env.VERSION ?? '0.1.0',
+    // Зберігаємо старий шлях, щоб міграція projects/tasks відбулася без втрати records.db.
     dbPath: env.DB_PATH ?? path.join(process.cwd(), 'data', 'records.db'),
   };
 }

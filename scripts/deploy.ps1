@@ -27,6 +27,14 @@ if ($LASTEXITCODE -ne 0) {
   & minikube start --driver=docker --container-runtime=containerd
 }
 
+Write-Host '==> Refusing unsafe emptyDir-to-PVC switch...'
+foreach ($service in @('data', 'dota')) {
+  $deploymentJson = & kubectl -n $Namespace get deployment $service -o json 2>$null
+  if ($LASTEXITCODE -eq 0 -and (($deploymentJson -join "`n") -match '"emptyDir"')) {
+    throw "deployment/$service still uses emptyDir; migrate and verify its SQLite database before applying the PVC manifests. See SETUP.md."
+  }
+}
+
 Write-Host '==> Building images locally (:local)...'
 docker build -t devsecops-platform-gateway:local  ./services/gateway
 if ($LASTEXITCODE -ne 0) { throw 'gateway build failed' }

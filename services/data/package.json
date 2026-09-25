@@ -2,7 +2,7 @@
   "name": "devsecops-data",
   "version": "0.1.0",
   "private": true,
-  "description": "Data microservice: CRUD-управління даними (SQLite) з валідацією",
+  "description": "Data microservice: проєкти та задачі (SQLite) з валідацією",
   "main": "dist/index.js",
   "engines": {
     "node": ">=20"
@@ -11,7 +11,7 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
-    "test": "node --import tsx --test test/db.test.ts"
+    "test": "node --import tsx test/db.test.ts"
   },
   "dependencies": {
     "better-sqlite3": "^11.8.1",

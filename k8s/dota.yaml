@@ -1,3 +1,18 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: dota-data
+  namespace: devsecops
+  labels:
+    app: dota
+    app.kubernetes.io/part-of: devsecops-platform
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -20,6 +35,8 @@ spec:
         runAsNonRoot: true
         runAsUser: 1000
         runAsGroup: 1000
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
       containers:
         - name: dota
           image: devsecops-platform-dota:local
@@ -62,8 +79,8 @@ spec:
             periodSeconds: 5
       volumes:
         - name: dota-data
-          # Для продакшну рекомендується PVC; emptyDir — демо-вибір.
-          emptyDir: {}
+          persistentVolumeClaim:
+            claimName: dota-data
 ---
 apiVersion: v1
 kind: Service

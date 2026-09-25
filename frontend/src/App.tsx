@@ -1,12 +1,12 @@
 import { NavLink, Route, Routes } from 'react-router-dom';
 import OverviewPage from './pages/OverviewPage';
 import MetricsPage from './pages/MetricsPage';
-import DataPage from './pages/DataPage';
+import ProjectsPage from './pages/ProjectsPage';
 
 const navItems = [
   { to: '/', label: 'Огляд', icon: '🛰️' },
   { to: '/metrics', label: 'Метрики', icon: '📊' },
-  { to: '/data', label: 'Дані', icon: '🗄️' },
+  { to: '/projects', label: 'Проєкти', icon: '📁' },
 ];
 
 export default function App() {
@@ -43,7 +43,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<OverviewPage />} />
           <Route path="/metrics" element={<MetricsPage />} />
-          <Route path="/data" element={<DataPage />} />
+          <Route path="/projects" element={<ProjectsPage />} />
         </Routes>
       </main>
     </div>

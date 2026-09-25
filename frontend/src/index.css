@@ -253,7 +253,8 @@ code {
   color: var(--accent);
 }
 
-.badge-archived {
+.badge-archived,
+.project-badge-archived {
   background: rgba(142, 160, 189, 0.15);
   color: var(--muted);
 }
@@ -519,5 +520,603 @@ code {
 
   .content {
     padding: 20px 16px;
+  }
+}
+
+/* ---------- Projects ---------- */
+.project-summary {
+  margin-bottom: 24px;
+}
+
+.project-summary .stat-value {
+  font-variant-numeric: tabular-nums;
+}
+
+.project-stat-active {
+  color: var(--ok);
+}
+
+.project-stat-blocked {
+  color: var(--err);
+}
+
+.project-create-card {
+  margin-bottom: 24px;
+}
+
+.project-form,
+.task-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.form-section-heading {
+  margin: 0;
+}
+
+.form-section-heading h2,
+.form-section-heading h3 {
+  margin: 0 0 4px;
+}
+
+.form-section-heading p {
+  margin: 0;
+  font-size: 13px;
+}
+
+.project-form-grid,
+.task-form-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.form-field-wide {
+  grid-column: 1 / -1;
+}
+
+.form-field label {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.form-field .input {
+  width: 100%;
+  min-width: 0;
+}
+
+.form-field textarea.input {
+  resize: vertical;
+  min-height: 72px;
+}
+
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.projects-layout {
+  display: grid;
+  grid-template-columns: minmax(290px, 360px) minmax(0, 1fr);
+  align-items: start;
+  gap: 20px;
+}
+
+.project-list-panel,
+.project-detail {
+  min-width: 0;
+}
+
+.project-list-panel {
+  position: sticky;
+  top: 20px;
+  max-height: calc(100vh - 40px);
+  overflow: auto;
+}
+
+.panel-heading,
+.section-heading,
+.detail-header,
+.progress-summary-heading,
+.project-item-top,
+.project-item-progress-label,
+.project-item-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.panel-heading {
+  align-items: flex-start;
+  margin-bottom: 16px;
+}
+
+.panel-heading h2,
+.section-heading h3 {
+  margin: 0 0 4px;
+  font-size: 17px;
+}
+
+.panel-heading p,
+.section-heading p {
+  margin: 0;
+  font-size: 12px;
+}
+
+.project-filters {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.filter-field {
+  min-width: 0;
+}
+
+.filter-field .input {
+  width: 100%;
+  min-width: 0;
+}
+
+.project-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.project-list-item {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: rgba(22, 33, 58, 0.55);
+  color: var(--text);
+  cursor: pointer;
+  padding: 12px;
+  text-align: left;
+  font: inherit;
+  transition: border-color 0.15s, background 0.15s, transform 0.15s;
+}
+
+.project-list-item:hover {
+  border-color: rgba(56, 189, 248, 0.65);
+  background: var(--panel-2);
+  transform: translateY(-1px);
+}
+
+.project-list-item.selected {
+  border-color: var(--accent);
+  background: rgba(56, 189, 248, 0.1);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.project-item-top {
+  align-items: flex-start;
+}
+
+.project-item-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 650;
+}
+
+.project-item-description {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+  margin: 8px 0 12px;
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.project-item-progress-label {
+  color: var(--muted);
+  font-size: 11px;
+  margin-bottom: 5px;
+}
+
+.project-item-progress-label strong {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.progress-track {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--panel-2);
+}
+
+.progress-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: width 0.4s ease;
+}
+
+.project-item-footer {
+  color: var(--muted);
+  font-size: 11px;
+  margin-top: 10px;
+}
+
+.detail-header {
+  align-items: flex-start;
+  margin-bottom: 16px;
+}
+
+.detail-title-block {
+  min-width: 0;
+}
+
+.detail-title-block h2 {
+  margin: 3px 0 9px;
+  font-size: 22px;
+  overflow-wrap: anywhere;
+}
+
+.eyebrow {
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+}
+
+.detail-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.project-badge-planned,
+.task-badge-todo,
+.priority-badge {
+  background: rgba(56, 189, 248, 0.14);
+  color: var(--accent);
+}
+
+.project-badge-active,
+.task-badge-in_progress {
+  background: rgba(251, 191, 36, 0.15);
+  color: var(--warn);
+}
+
+.project-badge-blocked {
+  background: rgba(248, 113, 113, 0.15);
+  color: var(--err);
+}
+
+.project-badge-completed,
+.task-badge-done {
+  background: rgba(74, 222, 128, 0.15);
+  color: var(--ok);
+}
+
+.priority-badge {
+  background: rgba(142, 160, 189, 0.14);
+  color: var(--muted);
+}
+
+.project-detail-description {
+  color: var(--muted);
+  line-height: 1.55;
+  margin: 0 0 18px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.project-progress-summary {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px;
+  margin-bottom: 18px;
+  background: rgba(22, 33, 58, 0.5);
+}
+
+.progress-summary-heading {
+  margin-bottom: 8px;
+}
+
+.progress-summary-heading span {
+  color: var(--accent);
+  font-size: 20px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.progress-summary-caption {
+  margin-top: 8px;
+  font-size: 12px;
+}
+
+.metadata-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 24px;
+}
+
+.metadata-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  border-left: 2px solid var(--border);
+  padding-left: 10px;
+}
+
+.metadata-item span {
+  font-size: 11px;
+}
+
+.metadata-item strong {
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.tasks-section {
+  border-top: 1px solid var(--border);
+  padding-top: 20px;
+}
+
+.tasks-section > .section-heading {
+  margin-bottom: 14px;
+}
+
+.count-badge {
+  min-width: 28px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: var(--panel-2);
+  color: var(--text);
+  text-align: center;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.task-form {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: rgba(22, 33, 58, 0.45);
+  padding: 14px;
+  margin-bottom: 16px;
+}
+
+.task-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.task-card {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.72);
+  padding: 13px;
+}
+
+.task-card-done {
+  border-color: rgba(74, 222, 128, 0.35);
+}
+
+.task-card-in_progress {
+  border-left: 3px solid var(--warn);
+}
+
+.task-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.task-card-heading {
+  min-width: 0;
+}
+
+.task-card-heading h4 {
+  margin: 0;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
+.task-card-heading p {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+  margin: 6px 0 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.task-card-details {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  color: var(--muted);
+  font-size: 12px;
+  margin: 12px 0;
+}
+
+.task-card-details b {
+  color: var(--text);
+}
+
+.task-card-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 7px;
+  border-top: 1px solid rgba(38, 51, 77, 0.7);
+  padding-top: 10px;
+}
+
+.task-status-control {
+  margin-right: auto;
+}
+
+.task-status-select {
+  min-width: 125px;
+  padding: 5px 9px;
+  font-size: 12px;
+}
+
+.task-edit-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.task-edit-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.empty-state {
+  min-height: 190px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 28px 18px;
+  color: var(--muted);
+  text-align: center;
+  font-size: 13px;
+}
+
+.empty-state strong {
+  color: var(--text);
+  font-size: 15px;
+}
+
+.empty-state-icon {
+  font-size: 28px;
+  margin-bottom: 4px;
+}
+
+.detail-empty-state {
+  min-height: 420px;
+}
+
+.task-empty-state {
+  min-height: 130px;
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+}
+
+.inline-status {
+  color: var(--muted);
+  font-size: 12px;
+  padding: 8px 0;
+}
+
+.task-loading-status {
+  margin-bottom: 10px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (max-width: 1100px) {
+  .projects-layout {
+    grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
+  }
+
+  .metadata-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 900px) {
+  .projects-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .project-list-panel {
+    position: static;
+    max-height: none;
+  }
+
+  .project-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 600px) {
+  .project-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .project-form-grid,
+  .task-form-grid,
+  .task-edit-grid,
+  .metadata-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .form-field-wide {
+    grid-column: auto;
+  }
+
+  .project-list {
+    grid-template-columns: 1fr;
+  }
+
+  .detail-header {
+    flex-direction: column;
+  }
+
+  .detail-actions {
+    justify-content: flex-start;
+  }
+
+  .task-card-header {
+    flex-direction: column;
+  }
+
+  .task-card-actions {
+    justify-content: flex-start;
+  }
+
+  .task-status-control {
+    margin-right: 0;
+    width: 100%;
+  }
+
+  .task-status-select {
+    width: 100%;
   }
 }

@@ -5,72 +5,155 @@ updates:
     directory: /services/gateway
     schedule:
       interval: weekly
-    open-pull-requests-limit: 10
+      day: monday
+      time: "04:00"
+      timezone: Etc/UTC
+    open-pull-requests-limit: 5
     labels: ["dependencies", "npm"]
+    groups:
+      npm-gateway-routine:
+        patterns: ["*"]
+        update-types: ["patch", "minor"]
 
   - package-ecosystem: npm
     directory: /services/metrics
     schedule:
       interval: weekly
-    open-pull-requests-limit: 10
+      day: monday
+      time: "04:00"
+      timezone: Etc/UTC
+    open-pull-requests-limit: 5
     labels: ["dependencies", "npm"]
+    groups:
+      npm-metrics-routine:
+        patterns: ["*"]
+        update-types: ["patch", "minor"]
 
   - package-ecosystem: npm
     directory: /services/data
     schedule:
       interval: weekly
-    open-pull-requests-limit: 10
+      day: monday
+      time: "04:00"
+      timezone: Etc/UTC
+    open-pull-requests-limit: 5
     labels: ["dependencies", "npm"]
+    groups:
+      npm-data-routine:
+        patterns: ["*"]
+        update-types: ["patch", "minor"]
 
   - package-ecosystem: npm
     directory: /frontend
     schedule:
       interval: weekly
-    open-pull-requests-limit: 10
+      day: monday
+      time: "04:00"
+      timezone: Etc/UTC
+    open-pull-requests-limit: 5
     labels: ["dependencies", "npm"]
+    groups:
+      npm-frontend-routine:
+        patterns: ["*"]
+        update-types: ["patch", "minor"]
 
   # --- Python (головний Dota-сервіс) ---
   - package-ecosystem: pip
     directory: /dota
     schedule:
       interval: weekly
-    open-pull-requests-limit: 10
-    labels: ["dependencies", "python"]
+      day: monday
+      time: "04:00"
+      timezone: Etc/UTC
+    open-pull-requests-limit: 5
+    labels: ["dependencies", "pip", "python"]
+    groups:
+      pip-dota-routine:
+        patterns: ["*"]
+        update-types: ["patch", "minor"]
 
   # --- Docker (Dockerfile + базові образи) ---
   - package-ecosystem: docker
     directory: /services/gateway
     schedule:
       interval: weekly
+      day: monday
+      time: "04:00"
+      timezone: Etc/UTC
+    open-pull-requests-limit: 5
     labels: ["dependencies", "docker"]
+    groups:
+      docker-gateway-routine:
+        patterns: ["*"]
+        update-types: ["patch", "minor"]
 
   - package-ecosystem: docker
     directory: /services/metrics
     schedule:
       interval: weekly
+      day: monday
+      time: "04:00"
+      timezone: Etc/UTC
+    open-pull-requests-limit: 5
     labels: ["dependencies", "docker"]
+    groups:
+      docker-metrics-routine:
+        patterns: ["*"]
+        update-types: ["patch", "minor"]
 
   - package-ecosystem: docker
     directory: /services/data
     schedule:
       interval: weekly
+      day: monday
+      time: "04:00"
+      timezone: Etc/UTC
+    open-pull-requests-limit: 5
     labels: ["dependencies", "docker"]
+    groups:
+      docker-data-routine:
+        patterns: ["*"]
+        update-types: ["patch", "minor"]
 
   - package-ecosystem: docker
     directory: /frontend
     schedule:
       interval: weekly
+      day: monday
+      time: "04:00"
+      timezone: Etc/UTC
+    open-pull-requests-limit: 5
     labels: ["dependencies", "docker"]
+    groups:
+      docker-frontend-routine:
+        patterns: ["*"]
+        update-types: ["patch", "minor"]
 
   - package-ecosystem: docker
     directory: /dota
     schedule:
       interval: weekly
+      day: monday
+      time: "04:00"
+      timezone: Etc/UTC
+    open-pull-requests-limit: 5
     labels: ["dependencies", "docker"]
+    groups:
+      docker-dota-routine:
+        patterns: ["*"]
+        update-types: ["patch", "minor"]
 
   # --- GitHub Actions ---
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
+      day: monday
+      time: "04:00"
+      timezone: Etc/UTC
+    open-pull-requests-limit: 5
     labels: ["dependencies", "github-actions"]
+    groups:
+      github-actions-routine:
+        patterns: ["*"]
+        update-types: ["patch", "minor"]

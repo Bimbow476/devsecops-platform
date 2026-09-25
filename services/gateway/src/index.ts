@@ -21,8 +21,8 @@ const metricsProxy = createProxyMiddleware({
   changeOrigin: true,
   pathFilter: '/api/metrics',
 });
-// Сервіс data експонує маршрути /api/records; gateway монтує їх під /api/data/*
-// та переписує шлях (топологія шлюзу відокремлена від домену сервісу).
+// Сервіс data експонує маршрути /api/projects і /api/tasks; gateway монтує їх
+// під /api/data/* та переписує шлях (топологія шлюзу відокремлена від домену сервісу).
 const dataProxy = createProxyMiddleware({
   target: config.dataUrl,
   changeOrigin: true,
@@ -59,7 +59,9 @@ app.get('/', (_req, res) => {
     endpoints: {
       status: '/api/status',
       metrics: '/api/metrics',
-      records: '/api/data/records',
+      projects: '/api/data/projects',
+      projectTasks: '/api/data/projects/:id/tasks',
+      tasks: '/api/data/tasks/:id',
       health: '/health',
     },
   });

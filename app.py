@@ -4,7 +4,6 @@ import pandas as pd
 
 from dota import db
 from dota import client as pclient
-from dota import security as sec_report
 from dota.predict import compute_prediction
 
 # Налаштування сторінки
@@ -145,190 +144,404 @@ def render_monitoring(pl_client: pclient.PlatformClient) -> None:
         )
 
 
-# ================= ПУБЛІЧНИЙ ТАБ: УПРАВЛІННЯ ДАНИМИ =================
-def render_data(pl_client: pclient.PlatformClient) -> None:
-    st.markdown("### Записи платформи (data-сервіс через gateway)")
-    st.caption("CRUD через REST API мікросервісу data: /api/data/records")
+# ================= ПУБЛІЧНИЙ ТАБ: УПРАВЛІННЯ ПРОЄКТАМИ =================
+PROJECT_STATUS_LABELS = {
+    "planned": "Запланований",
+    "active": "Активний",
+    "blocked": "Заблокований",
+    "completed": "Завершений",
+    # Можливий лише для даних, перенесених зі старого records-контракту.
+    "archived": "Архівований (стара система)",
+}
+PROJECT_STATUS_OPTIONS = [
+    status for status in PROJECT_STATUS_LABELS if status != "archived"
+]
+PROJECT_FILTER_OPTIONS = ["", *PROJECT_STATUS_LABELS]
+TASK_STATUS_LABELS = {
+    "todo": "До розподілу",
+    "in_progress": "У роботі",
+    "done": "Готово",
+}
 
-    col_a, col_b = st.columns(2)
-    with col_a:
-        search_q = st.text_input("Пошук (назва/опис)", key="rec_search")
-    with col_b:
+
+def _optional_text(value: str | None) -> str | None:
+    cleaned = (value or "").strip()
+    return cleaned or None
+
+
+def _project_status_label(status: str) -> str:
+    return PROJECT_STATUS_LABELS.get(status, status)
+
+
+def _project_form_status(status: str) -> str:
+    """Переводить legacy-статус у форму, дозволену поточним API."""
+    return status if status in PROJECT_STATUS_OPTIONS else "completed"
+
+
+def _task_status_label(status: str) -> str:
+    return TASK_STATUS_LABELS.get(status, status)
+
+
+def render_projects(pl_client: pclient.PlatformClient) -> None:
+    st.markdown("### Проєкти та задачі")
+    st.caption(
+        "Джерело даних — REST API мікросервісу data через gateway. "
+        "Прогрес рахується з виконаних задач, а не генерується."
+    )
+
+    if st.button("🔄 Оновити проєкти", key="projects_refresh"):
+        pl_client.invalidate()
+        st.rerun()
+
+    col_search, col_status = st.columns([2, 1])
+    with col_search:
+        search_q = st.text_input("Пошук проєкту", key="project_search")
+    with col_status:
         status_f = st.selectbox(
-            "Статус",
-            ["", "new", "in_progress", "done", "archived"],
-            key="rec_status",
+            "Статус проєкту",
+            PROJECT_FILTER_OPTIONS,
+            format_func=lambda value: value if not value else _project_status_label(value),
+            key="project_status_filter",
         )
 
     try:
-        result = pl_client.list_records(search=search_q, status=status_f, limit=100)
-        items = result.get("items", [])
-        total = result.get("total", len(items))
-        st.caption(f"Знайдено записів: {total}")
-        if items:
-            display = pd.DataFrame(items)[
-                ["id", "title", "description", "status", "priority", "updated_at"]
-            ]
-            st.dataframe(display, use_container_width=True, hide_index=True)
-        else:
-            st.info("Записів немає.")
+        result = pl_client.list_all_projects(
+            search=search_q, status=status_f, page_size=100
+        )
+        projects = result.get("items", [])
+        total = int(result.get("total", len(projects)))
     except pclient.PlatformUnavailable:
-        st.error("Сервіс даних недоступний.")
+        st.error("Сервіс проєктів недоступний.")
+        return
 
-    col_c, col_d = st.columns(2)
-    with col_c:
-        with st.expander("➕ Додати запис"):
-            title = st.text_input("Назва запису", key="rec_title")
-            desc = st.text_area("Опис", key="rec_desc")
-            st_s, st_p = st.columns(2)
-            status_new = st_s.selectbox(
-                "Статус", ["new", "in_progress", "done", "archived"], key="rec_new_status"
+    active_count = sum(p.get("status") == "active" for p in projects)
+    completed_count = sum(p.get("status") == "completed" for p in projects)
+    avg_progress = (
+        sum(float(p.get("progress_percent", 0)) for p in projects) / len(projects)
+        if projects
+        else 0
+    )
+    metric_cols = st.columns(4)
+    metric_cols[0].metric("Проєктів", total)
+    metric_cols[1].metric("Активних", active_count)
+    metric_cols[2].metric("Завершених", completed_count)
+    metric_cols[3].metric("Середній прогрес", f"{avg_progress:.0f}%")
+
+    with st.expander("➕ Створити проєкт", expanded=not projects):
+        with st.form("project_create_form", clear_on_submit=True):
+            name = st.text_input("Назва проєкту *", max_chars=120)
+            description = st.text_area("Опис", max_chars=2000)
+            form_cols = st.columns(3)
+            new_status = form_cols[0].selectbox(
+                "Статус",
+                list(PROJECT_STATUS_OPTIONS),
+                format_func=_project_status_label,
             )
-            priority_new = st_p.slider("Пріоритет (1-5)", 1, 5, 3, key="rec_priority")
-            if st.button("Створити запис", key="rec_create"):
-                if title.strip():
-                    try:
-                        pl_client.create_record(
-                            title.strip(), desc.strip() or None, status_new, priority_new
-                        )
-                        st.success("Запис створено.")
-                        st.rerun()
-                    except pclient.PlatformUnavailable:
-                        st.error("Не вдалося створити запис: сервіс недоступний.")
-                else:
-                    st.warning("Вкажіть назву запису.")
-    with col_d:
-        with st.expander("🗑️ Видалити запис"):
-            rec_id = st.number_input("ID запису", min_value=1, step=1, key="rec_del_id")
-            if st.button("Видалити", key="rec_del"):
+            new_priority = form_cols[1].slider("Пріоритет (1–5)", 1, 5, 3)
+            owner = form_cols[2].text_input("Відповідальний")
+            due_date = st.text_input(
+                "Дедлайн (YYYY-MM-DD)", placeholder="наприклад, 2026-12-31"
+            )
+            submitted = st.form_submit_button("Створити проєкт", type="primary")
+
+        if submitted:
+            if not name.strip():
+                st.warning("Вкажіть назву проєкту.")
+            else:
                 try:
-                    if pl_client.delete_record(int(rec_id)):
-                        st.info(f"Запис #{rec_id} видалено.")
+                    pl_client.create_project(
+                        name.strip(),
+                        _optional_text(description),
+                        new_status,
+                        new_priority,
+                        _optional_text(owner),
+                        _optional_text(due_date),
+                    )
+                    st.success("Проєкт створено.")
+                    st.rerun()
+                except pclient.PlatformUnavailable as exc:
+                    st.error(f"Не вдалося створити проєкт: {exc}")
+
+    if not projects:
+        st.info("Проєктів поки немає. Створіть перший проєкт або змініть фільтри.")
+        return
+
+    project_by_id = {int(project["id"]): project for project in projects}
+    selected_id = st.selectbox(
+        "Обраний проєкт",
+        options=list(project_by_id),
+        format_func=lambda project_id: (
+            f"#{project_id} · {project_by_id[project_id]['name']}"
+        ),
+        key="selected_project_id",
+    )
+    selected = project_by_id[selected_id]
+
+    st.subheader(selected["name"])
+    st.caption(selected.get("description") or "Опис проєкту не вказано.")
+    progress = float(selected.get("progress_percent", 0))
+    st.progress(min(max(progress / 100.0, 0.0), 1.0))
+    st.caption(
+        f"Статус: {_project_status_label(selected['status'])} · "
+        f"Пріоритет: {selected['priority']}/5 · "
+        f"Задачі: {selected.get('completed_task_count', 0)}/"
+        f"{selected.get('task_count', 0)} · Прогрес: {progress:.0f}%"
+    )
+    owner = selected.get("owner")
+    due_date = selected.get("due_date")
+    if owner or due_date:
+        st.caption(
+            " · ".join(
+                part
+                for part in (
+                    f"Відповідальний: {owner}" if owner else "",
+                    f"Дедлайн: {due_date}" if due_date else "",
+                )
+                if part
+            )
+        )
+
+    if selected["status"] == "archived":
+        st.info(
+            "ℹ️ Це legacy-архівований проєкт: доступний для перегляду, "
+            "але недоступний для редагування."
+        )
+    else:
+        with st.expander("✏️ Редагувати проєкт"):
+            with st.form(f"project_edit_{selected_id}"):
+                edit_name = st.text_input("Назва", value=selected["name"], max_chars=120)
+                edit_description = st.text_area(
+                    "Опис", value=selected.get("description") or ""
+                )
+                edit_cols = st.columns(3)
+                edit_status = edit_cols[0].selectbox(
+                    "Статус",
+                    list(PROJECT_STATUS_OPTIONS),
+                    index=list(PROJECT_STATUS_OPTIONS).index(
+                        _project_form_status(selected["status"])
+                    ),
+                    format_func=_project_status_label,
+                )
+                edit_priority = edit_cols[1].slider(
+                    "Пріоритет", 1, 5, int(selected["priority"])
+                )
+                edit_owner = edit_cols[2].text_input(
+                    "Відповідальний", value=selected.get("owner") or ""
+                )
+                edit_due = st.text_input("Дедлайн (YYYY-MM-DD)", value=due_date or "")
+                save_project = st.form_submit_button("Зберегти зміни")
+
+            if save_project:
+                if not edit_name.strip():
+                    st.warning("Назва проєкту не може бути порожньою.")
+                else:
+                    try:
+                        pl_client.update_project(
+                            selected_id,
+                            {
+                                "name": edit_name.strip(),
+                                "description": _optional_text(edit_description),
+                                "status": edit_status,
+                                "priority": int(edit_priority),
+                                "owner": _optional_text(edit_owner),
+                                "due_date": _optional_text(edit_due),
+                            },
+                        )
+                        st.success("Проєкт оновлено.")
+                        st.rerun()
+                    except pclient.PlatformUnavailable as exc:
+                        st.error(f"Не вдалося оновити проєкт: {exc}")
+
+    if selected["status"] != "archived":
+        confirm_project_delete = st.checkbox(
+            "Підтверджую видалення проєкту разом із задачами",
+            key=f"confirm_project_delete_{selected_id}",
+        )
+        if st.button(
+            "🗑️ Видалити проєкт",
+            disabled=not confirm_project_delete,
+            key=f"delete_project_{selected_id}",
+        ):
+            try:
+                if pl_client.delete_project(selected_id):
+                    st.success("Проєкт видалено.")
+                    st.rerun()
+                else:
+                    st.warning("Проєкт уже не існує.")
+                    st.rerun()
+            except pclient.PlatformUnavailable as exc:
+                st.error(f"Не вдалося видалити проєкт: {exc}")
+
+    st.divider()
+    st.subheader("Задачі проєкту")
+    try:
+        tasks = pl_client.list_all_tasks(selected_id)
+    except pclient.PlatformUnavailable:
+        st.error("Не вдалося завантажити задачі проєкту.")
+        return
+
+    done_count = sum(task.get("status") == "done" for task in tasks)
+    st.caption(f"Виконано {done_count} із {len(tasks)} задач.")
+
+    if selected["status"] != "archived":
+        with st.expander("➕ Додати задачу"):
+            with st.form(f"task_create_{selected_id}", clear_on_submit=True):
+                task_title = st.text_input("Назва задачі *", max_chars=160)
+                task_description = st.text_area("Опис", max_chars=2000)
+                task_cols = st.columns(3)
+                task_status = task_cols[0].selectbox(
+                    "Статус", list(TASK_STATUS_LABELS), format_func=_task_status_label
+                )
+                task_priority = task_cols[1].slider("Пріоритет (1–5)", 1, 5, 3)
+                assignee = task_cols[2].text_input("Виконавець")
+                task_due = st.text_input("Дедлайн (YYYY-MM-DD)")
+                create_task = st.form_submit_button("Додати задачу", type="primary")
+
+            if create_task:
+                if not task_title.strip():
+                    st.warning("Вкажіть назву задачі.")
+                else:
+                    try:
+                        pl_client.create_task(
+                            selected_id,
+                            task_title.strip(),
+                            _optional_text(task_description),
+                            task_status,
+                            task_priority,
+                            _optional_text(assignee),
+                            _optional_text(task_due),
+                        )
+                        st.success("Задачу додано.")
+                        st.rerun()
+                    except pclient.PlatformUnavailable as exc:
+                        st.error(f"Не вдалося додати задачу: {exc}")
+
+    if tasks:
+        task_rows = [
+            {
+                "ID": task["id"],
+                "Задача": task["title"],
+                "Статус": _task_status_label(task["status"]),
+                "Пріоритет": task["priority"],
+                "Виконавець": task.get("assignee") or "—",
+                "Дедлайн": task.get("due_date") or "—",
+            }
+            for task in tasks
+        ]
+        st.dataframe(pd.DataFrame(task_rows), use_container_width=True, hide_index=True)
+
+        if selected["status"] != "archived":
+            task_by_id = {int(task["id"]): task for task in tasks}
+            task_to_edit = st.selectbox(
+                "Задача для редагування",
+                options=list(task_by_id),
+                format_func=lambda task_id: f"#{task_id} · {task_by_id[task_id]['title']}",
+                key=f"task_to_edit_{selected_id}",
+            )
+            task = task_by_id[task_to_edit]
+            with st.expander("✏️ Редагувати задачу"):
+                with st.form(f"task_edit_{task_to_edit}"):
+                    edit_task_title = st.text_input(
+                        "Назва", value=task["title"], max_chars=160
+                    )
+                    edit_task_description = st.text_area(
+                        "Опис", value=task.get("description") or ""
+                    )
+                    edit_task_cols = st.columns(3)
+                    edit_task_status = edit_task_cols[0].selectbox(
+                        "Статус",
+                        list(TASK_STATUS_LABELS),
+                        index=list(TASK_STATUS_LABELS).index(task["status"]),
+                        format_func=_task_status_label,
+                    )
+                    edit_task_priority = edit_task_cols[1].slider(
+                        "Пріоритет", 1, 5, int(task["priority"])
+                    )
+                    edit_assignee = edit_task_cols[2].text_input(
+                        "Виконавець", value=task.get("assignee") or ""
+                    )
+                    edit_task_due = st.text_input(
+                        "Дедлайн (YYYY-MM-DD)", value=task.get("due_date") or ""
+                    )
+                    save_task = st.form_submit_button("Зберегти задачу")
+
+                if save_task:
+                    if not edit_task_title.strip():
+                        st.warning("Назва задачі не може бути порожньою.")
+                    else:
+                        try:
+                            pl_client.update_task(
+                                task_to_edit,
+                                {
+                                    "title": edit_task_title.strip(),
+                                    "description": _optional_text(edit_task_description),
+                                    "status": edit_task_status,
+                                    "priority": int(edit_task_priority),
+                                    "assignee": _optional_text(edit_assignee),
+                                    "due_date": _optional_text(edit_task_due),
+                                },
+                            )
+                            st.success("Задачу оновлено.")
+                            st.rerun()
+                        except pclient.PlatformUnavailable as exc:
+                            st.error(f"Не вдалося оновити задачу: {exc}")
+
+            confirm_task_delete = st.checkbox(
+                "Підтверджую видалення обраної задачі",
+                key=f"confirm_task_delete_{task_to_edit}",
+            )
+            if st.button(
+                "🗑️ Видалити обрану задачу",
+                disabled=not confirm_task_delete,
+                key=f"delete_task_{task_to_edit}",
+            ):
+                try:
+                    if pl_client.delete_task(task_to_edit):
+                        st.success("Задачу видалено.")
                         st.rerun()
                     else:
-                        st.warning(f"Запис #{rec_id} не знайдено.")
-                except pclient.PlatformUnavailable:
-                    st.error("Не вдалося видалити: сервіс недоступний.")
-
-    # Експорт/імпорт персональних прогнозів (вимагає входу)
-    if st.session_state.logged_in:
-        st.divider()
-        st.markdown(f"### Мої прогнози ({st.session_state.username})")
-        st.caption("Експорт/імпорт персональної історії прогнозів (власна SQLite).")
-        col_e, col_f = st.columns(2)
-        with col_e:
-            st.download_button(
-                "⬇️ Експорт CSV",
-                data=db.export_predictions_csv(st.session_state.username),
-                file_name=f"dota_history_{st.session_state.username}.csv",
-                mime="text/csv",
-                key="exp_csv",
-            )
-            st.download_button(
-                "⬇️ Експорт JSON",
-                data=db.export_predictions_json(st.session_state.username),
-                file_name=f"dota_history_{st.session_state.username}.json",
-                mime="application/json",
-                key="exp_json",
-            )
-        with col_f:
-            uploaded = st.file_uploader(
-                "Імпортувати CSV прогнозів", type=["csv"], key="imp_csv"
-            )
-            if uploaded is not None:
-                df_in = pd.read_csv(uploaded)
-                try:
-                    n_imported = db.import_prediction_history(
-                        st.session_state.username, df_in
-                    )
-                    st.success(f"Імпортовано записів: {n_imported}")
-                    st.rerun()
-                except ValueError as exc:
-                    st.error(str(exc))
+                        st.warning("Задача уже не існує.")
+                        st.rerun()
+                except pclient.PlatformUnavailable as exc:
+                    st.error(f"Не вдалося видалити задачу: {exc}")
+    elif selected["status"] != "archived":
+        st.info("У цьому проєкті ще немає задач. Додайте першу задачу.")
+    else:
+        st.info("У legacy-проєкті немає задач для перегляду.")
 
 
-# ================= ПУБЛІЧНИЙ ТАБ: БЕЗПЕКА / DEVSECOPS =================
-def render_security() -> None:
-    st.markdown("### Проактивний контроль вразливостей (DevSecOps)")
-    st.caption(
-        "⚠️ Змодельований звіт (рандомна генерація для демонстрації). "
-        "Реальні результати генеруються в CI/CD: Trivy, CodeQL, "
-        "pip-audit, npm audit та Dependabot."
-    )
+def render_prediction_archive(username: str) -> None:
+    """Персональний архів прогнозів не пов'язаний із проєктами платформи."""
+    st.divider()
+    st.markdown("### Експорт та імпорт прогнозів")
+    st.caption("Персональні дані зберігаються окремо від проєктів у власній SQLite.")
+    col_export, col_import = st.columns(2)
+    with col_export:
+        st.download_button(
+            "⬇️ Експорт CSV",
+            data=db.export_predictions_csv(username),
+            file_name=f"dota_history_{username}.csv",
+            mime="text/csv",
+            key="exp_csv",
+        )
+        st.download_button(
+            "⬇️ Експорт JSON",
+            data=db.export_predictions_json(username),
+            file_name=f"dota_history_{username}.json",
+            mime="application/json",
+            key="exp_json",
+        )
+    with col_import:
+        uploaded = st.file_uploader("Імпортувати CSV прогнозів", type=["csv"], key="imp_csv")
+        if uploaded is not None:
+            df_in = pd.read_csv(uploaded)
+            try:
+                imported = db.import_prediction_history(username, df_in)
+                st.success(f"Імпортовано записів: {imported}")
+                st.rerun()
+            except ValueError as exc:
+                st.error(str(exc))
 
-    if "sec_report" not in st.session_state:
-        st.session_state.sec_report = sec_report.generate_security_report()
-
-    if st.button("🎲 Згенерувати новий звіт"):
-        st.session_state.sec_report = sec_report.generate_security_report()
-        st.rerun()
-
-    report = st.session_state.sec_report
-    score = sec_report.security_score(report)
-
-    total_critical = sum(s["trivy"]["critical"] for s in report["services"])
-    total_high = sum(s["trivy"]["high"] for s in report["services"])
-    open_alerts = sum(1 for a in report["alerts"] if a["status"] == "open")
-    ok_workflows = sum(1 for w in report["workflows"] if w["status"] == "success")
-    n_workflows = len(report["workflows"])
-
-    col1, col2, col3, col4 = st.columns(4)
-    col1.metric("CRITICAL (образи)", total_critical)
-    col2.metric("HIGH (образи)", total_high)
-    col3.metric("Відкриті алерти залежностей", open_alerts)
-    col4.metric("Workflows ✓", f"{ok_workflows}/{n_workflows}")
-
-    st.write("**Оцінка безпеки платформи (демо):**")
-    st.progress(score / 100.0)
-
-    st.markdown("#### Сканування Docker-образів (Trivy)")
-    trivy_df = pd.DataFrame(
-        [
-            {
-                "Сервіс": s["service"],
-                "Образ": s["image_tag"],
-                "CRITICAL": s["trivy"]["critical"],
-                "HIGH": s["trivy"]["high"],
-                "MEDIUM": s["trivy"]["medium"],
-                "LOW": s["trivy"]["low"],
-                "Останній скан": f"{s['last_scan_minutes_ago']} хв тому",
-            }
-            for s in report["services"]
-        ]
-    )
-    st.dataframe(trivy_df, use_container_width=True, hide_index=True)
-
-    st.markdown("#### Алерти залежностей (Dependabot)")
-    st.dataframe(
-        pd.DataFrame(report["alerts"]), use_container_width=True, hide_index=True
-    )
-
-    st.markdown("#### Запуски пайплайну (GitHub Actions)")
-    wf_df = pd.DataFrame(
-        [
-            {
-                "Workflow": w["name"],
-                "Статус": "✅" if w["status"] == "success" else "❌",
-                "Тривалість": f"{w['duration_sec']} с",
-                "Тригер": w["trigger"],
-            }
-            for w in report["workflows"]
-        ]
-    )
-    st.dataframe(wf_df, use_container_width=True, hide_index=True)
-
-    with st.expander("🔒 Практики безпеки, впроваджені в платформі"):
-        practices = [
-            "Non-root контейнери (runAsNonRoot, uid 1000) у всіх сервісах",
-            "Liveness/readiness probes та HEALTHCHECK в образах",
-            "Мінімальний runtime-образ Dota: без pip та lockfile",
-            "Trivy-сканування образів у CI з порогом 0 CRITICAL/HIGH",
-            "CodeQL — статичний аналіз Python + JavaScript/TypeScript",
-            "Dependabot — алерти на вразливості залежностей та авто-PR",
-            "pip-audit та npm audit у конвеєрі",
-            "Харднінг OS-пакетів бази (apt upgrade), видалення apt lists",
-        ]
-        st.write("\n".join(f"- {p}" for p in practices))
 
 
 # ================= СТОРІНКА 1 (ГОЛОВНА): АНАЛІТИКА DOTA 2 =================
@@ -558,35 +771,33 @@ def page_analytics() -> None:
         else:
             st.info("Ваша історія симуляцій порожня. Зробіть свій перший прогноз!")
 
+        render_prediction_archive(st.session_state.username)
 
-# ================= СТОРІНКА 2: ПЛАТФОРМА DEVSECOPS =================
+
+# ================= СТОРІНКА 2: МІЖСЕРВІСНА ПЛАТФОРМА =================
 def page_platform() -> None:
-    st.title("Платформа DevSecOps")
+    st.title("Міжсервісна платформа")
     st.caption(
         "Публічні розділи головного сервісу (доступні без входу): моніторинг "
-        "мікросервісної платформи, управління даними через data-сервіс та "
-        "проактивний контроль вразливостей."
+        "мікросервісної платформи та керування проєктами й задачами."
     )
 
-    tab_mon, tab_data, tab_sec = st.tabs(
-        ["📊 Моніторинг платформи", "🗄️ Управління даними", "🛡️ Безпека / DevSecOps"]
+    tab_mon, tab_projects = st.tabs(
+        ["📊 Моніторинг платформи", "🗂️ Управління проєктами"]
     )
 
     with tab_mon:
         render_monitoring(client)
 
-    with tab_data:
-        render_data(client)
-
-    with tab_sec:
-        render_security()
+    with tab_projects:
+        render_projects(client)
 
 
 # ================= НАВІГАЦІЯ МІЖ СТОРІНКАМИ =================
 pg = st.navigation(
     [
         st.Page(page_analytics, title="Аналітика Dota 2", icon="🎮", default=True),
-        st.Page(page_platform, title="Платформа DevSecOps", icon="🛠"),
+        st.Page(page_platform, title="Міжсервісна платформа", icon="🛠"),
     ]
 )
 pg.run()

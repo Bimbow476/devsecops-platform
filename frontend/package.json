@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "React dashboard: моніторинг системних процесів та управління даними",
+  "description": "React dashboard: моніторинг платформи та керування проєктами",
   "engines": {
     "node": ">=20"
   },

@@ -6,6 +6,12 @@ on:
   pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: read
+  # Дозволяє read-only build/test cache; write-доступ до registry залишається
+  # лише у docker-publish для main.
+  actions: read
+
 env:
   REGISTRY: ghcr.io
 
@@ -69,17 +75,13 @@ jobs:
       - name: Dependency vulnerability audit (pip-audit)
         run: |
           pip install pip-audit
-          pip-audit -r dota/requirements.txt \
-            || echo "::warning::pip-audit: знайдені вразливості Python-залежностей (див. лог вище)"
+          pip-audit -r dota/requirements.txt
 
-  # ---------- Збірка Docker-образів, сканування Trivy та публікація в GHCR ----------
+  # ---------- Збірка Docker-образів і сканування Trivy ----------
   docker:
-    name: Build & publish image (${{ matrix.service }})
+    name: Build & scan image (${{ matrix.service }})
     needs: [build-test, dota-test]
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
     strategy:
       fail-fast: false
       matrix:
@@ -89,12 +91,6 @@ jobs:
 
       - uses: docker/setup-buildx-action@v3
 
-      - uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
       # GHCR вимагає нижній регістр: github.repository може містити великі літери
       - name: Compute image name
         id: image
@@ -102,18 +98,18 @@ jobs:
           REPO="${{ github.repository }}"
           echo "name=ghcr.io/${REPO,,}-${{ matrix.service }}" >> "$GITHUB_OUTPUT"
 
-      # context: frontend та dota — у корені репо; інші сервіси — у services/<name>
-      - name: Build and push image
+      # context: frontend та dota — у корені репо; інші сервізи — у services/<name>
+      - name: Build image for local scanning
         uses: docker/build-push-action@v6
         with:
           context: ${{ matrix.service == 'frontend' && 'frontend' || matrix.service == 'dota' && '.' || format('services/{0}', matrix.service) }}
           file: ${{ matrix.service == 'frontend' && 'frontend/Dockerfile' || matrix.service == 'dota' && 'dota/Dockerfile' || format('services/{0}/Dockerfile', matrix.service) }}
-          push: true
-          tags: |
-            ${{ steps.image.outputs.name }}:sha-${{ github.sha }}
-            ${{ steps.image.outputs.name }}:latest
+          load: true
+          push: false
+          tags: ${{ steps.image.outputs.name }}:sha-${{ github.sha }}
           cache-from: type=gha
-          cache-to: type=gha,mode=max
+          # Не експортуємо GHA cache із PR: Dependabot/fork не має write-доступу.
+          # Сканований образ лише збирається локально і передається в Trivy.
 
       # Shift-left: сканування готового образу на CVE (провал при CRITICAL/HIGH)
       - name: Image vulnerability scan (Trivy)
@@ -124,3 +120,82 @@ jobs:
           exit-code: '1'
           ignore-unfixed: true
           severity: CRITICAL,HIGH
+
+      # На main передаємо саме перевірений локальний образ, а не другий build.
+      # docker-publish завантажує цей артефакт і пушить його без повторної
+      # збірки; на PR/fork крок пропускається і GHCR нічого не отримує.
+      - name: Export scanned image for publication
+        if: ${{ github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          image_ref="${{ steps.image.outputs.name }}:sha-${{ github.sha }}"
+          docker image inspect --format '{{.Id}}' "$image_ref" > "$RUNNER_TEMP/${{ matrix.service }}.image-id"
+          docker save "$image_ref" -o "$RUNNER_TEMP/${{ matrix.service }}.tar"
+
+      - name: Upload exact scanned image
+        if: ${{ github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: scanned-image-${{ matrix.service }}-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/${{ matrix.service }}.tar
+            ${{ runner.temp }}/${{ matrix.service }}.image-id
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+
+  # ---------- Публікація вже перевірених образів у GHCR лише для main ----------
+  docker-publish:
+    name: Publish image (${{ matrix.service }})
+    if: ${{ github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') }}
+    needs: docker
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [gateway, metrics, data, frontend, dota]
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: scanned-image-${{ matrix.service }}-${{ github.sha }}
+          path: ${{ runner.temp }}/scanned-image
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # GHCR вимагає нижній регістр: github.repository може містити великі літери
+      - name: Compute image name
+        id: image
+        run: |
+          REPO="${{ github.repository }}"
+          echo "name=${{ env.REGISTRY }}/${REPO,,}-${{ matrix.service }}" >> "$GITHUB_OUTPUT"
+
+      # context: frontend та dota — у корені репо; інші сервізи — у services/<name>
+      # The artifact contains the image that was scanned above; do not rebuild it.
+      - name: Load and push the exact scanned image
+        shell: bash
+        run: |
+          set -euo pipefail
+          image_ref="${{ steps.image.outputs.name }}:sha-${{ github.sha }}"
+          artifact_dir="${{ runner.temp }}/scanned-image"
+          docker load --input "$artifact_dir/${{ matrix.service }}.tar"
+          expected_id="$(tr -d '[:space:]' < "$artifact_dir/${{ matrix.service }}.image-id")"
+          actual_id="$(docker image inspect --format '{{.Id}}' "$image_ref")"
+          if [[ "$actual_id" != "$expected_id" ]]; then
+            echo "::error::Loaded image ID does not match the Trivy-scanned artifact"
+            echo "expected=${expected_id} actual=${actual_id}"
+            exit 1
+          fi
+          docker push "$image_ref"
+          docker tag "$image_ref" "${{ steps.image.outputs.name }}:latest"
+          docker push "${{ steps.image.outputs.name }}:latest"
+          digest="$(docker image inspect --format '{{index .RepoDigests 0}}' "$image_ref")"
+          echo "Published exact scanned image: ${image_ref}@${digest}" >> "$GITHUB_STEP_SUMMARY"
