@@ -100,7 +100,7 @@ jobs:
 
       # context: frontend та dota — у корені репо; інші сервізи — у services/<name>
       - name: Build image for local scanning
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: ${{ matrix.service == 'frontend' && 'frontend' || matrix.service == 'dota' && '.' || format('services/{0}', matrix.service) }}
           file: ${{ matrix.service == 'frontend' && 'frontend/Dockerfile' || matrix.service == 'dota' && 'dota/Dockerfile' || format('services/{0}/Dockerfile', matrix.service) }}
