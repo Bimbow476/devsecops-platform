@@ -16,7 +16,7 @@
   "dependencies": {
     "cors": "^2.8.5",
     "express": "^4.21.2",
-    "pidusage": "^3.0.2"
+    "pidusage": "^4.0.1"
   },
   "devDependencies": {
     "@types/cors": "^2.8.17",
